@@ -1,0 +1,25 @@
+{
+  "unit": {
+    "grade": 4,
+    "term": 2,
+    "unit_index": 3,
+    "unit_name": "小数加减法"
+  },
+  "lessons": [
+    {
+      "file": "01_买菜.md",
+      "name": "买菜",
+      "knowledge_points": ["一位小数加法", "一位小数减法", "小数点对齐"]
+    },
+    {
+      "file": "02_比身高.md",
+      "name": "比身高",
+      "knowledge_points": ["两位小数加减法", "数位不同的小数加减", "小数末尾添 0"]
+    },
+    {
+      "file": "03_谁先冲过终点.md",
+      "name": "谁先冲过终点",
+      "knowledge_points": ["小数加减混合运算", "解决实际问题", "估算"]
+    }
+  ]
+}

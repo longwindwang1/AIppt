@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Env
+.env
+.env.local
+
+# 本地数据：教材正文受版权保护，绝不入库
+knowledge_base/textbooks/*
+!knowledge_base/textbooks/.gitkeep
+
+# 课程标准抓取产物（可重新生成）
+knowledge_base/standards/*
+!knowledge_base/standards/.gitkeep
+
+# 知识库元数据本地维护，不提交
+knowledge_base/index.json
+
+# 生成产物
+runs/*
+!runs/.gitkeep
+*.pptx
+!pptx_assets/*.pptx
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# uv
+.uv/
+uv.lock

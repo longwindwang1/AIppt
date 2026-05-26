@@ -1,0 +1,45 @@
+name: 🐛 Bug 报告
+description: 报告一个 bug
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 实际发生了什么？预期是什么？
+      placeholder: |
+        - 我做了什么
+        - 看到了什么
+        - 期望看到什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 启动 `uv run uvicorn app.main:app`
+        2. 浏览器开 /generate
+        3. 选「四年级 / 下册 / 小数加减法 / 买菜 / 课时教案」点生成
+        4. 30 秒后报错
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      placeholder: |
+        - OS: Windows 11 / macOS 14 / Ubuntu 22.04
+        - Python: `python --version` 的输出
+        - aippt 版本 / 提交 hash
+        - 是否启用 Mock 模式
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图
+      description: 控制台错误信息、浏览器 console、相关 .pptx 渲染异常截图

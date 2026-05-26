@@ -1,0 +1,70 @@
+{
+  "title": "北师大版四年级下册 第三单元 小数加减法 · 买菜",
+  "grade": 4,
+  "term": 2,
+  "unit_name": "小数加减法",
+  "lesson_name": "买菜",
+  "deck_type": "lesson_plan",
+  "slides": [
+    {
+      "type": "title",
+      "title": "买菜",
+      "subtitle": "北师大版四年级下册 · 第三单元 · 小数加减法",
+      "notes": "上课问候。出示课题。"
+    },
+    {
+      "type": "section",
+      "title": "一、复习导入",
+      "bullets": ["回顾小数的意义", "回顾整数加减法"]
+    },
+    {
+      "type": "content",
+      "title": "想一想：菜场里的小数",
+      "bullets": [
+        "白菜 2.5 元 / 斤",
+        "番茄 3.8 元 / 斤",
+        "鸡蛋 1.2 元 / 个"
+      ],
+      "animation": "reveal_on_click",
+      "notes": "让学生说说在菜场见过哪些小数标价。"
+    },
+    {
+      "type": "example",
+      "title": "例 1 · 买菜计算",
+      "question": "妈妈买了 2.5 元的白菜和 3.8 元的番茄，一共花了多少钱？",
+      "solution_steps": [
+        "列竖式：2.5 + 3.8",
+        "小数点对齐",
+        "从十分位加起：5 + 8 = 13，写 3 进 1",
+        "个位：2 + 3 + 1 = 6",
+        "得到 6.3"
+      ],
+      "answer": "一共花了 6.3 元",
+      "animation": "step_by_step"
+    },
+    {
+      "type": "practice",
+      "title": "课堂练习",
+      "question": "小明买文具花了 4.6 元，又买零食花了 2.7 元，一共花了多少元？",
+      "hint": "记得小数点对齐",
+      "notes": "答案：4.6 + 2.7 = 7.3 元。给学生 2 分钟独立思考。"
+    },
+    {
+      "type": "interactive",
+      "title": "想一想",
+      "question": "为什么小数加减法要把小数点对齐？",
+      "hint": "想一想相同数位上的数字代表什么",
+      "notes": "引导学生说出：小数点对齐，相同数位上的数才能相加。"
+    },
+    {
+      "type": "summary",
+      "title": "课堂小结",
+      "bullets": [
+        "小数加减法的关键：小数点对齐",
+        "本质：相同数位上的数才能相加减",
+        "结果中的小数点要和题目里的对齐"
+      ],
+      "animation": "reveal_on_click"
+    }
+  ]
+}

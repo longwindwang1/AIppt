@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>给小学数学老师的 PPT 助手</h1>
+  <p>选课时、选类型、点生成。10~30 秒后下载 .pptx，直接讲课。</p>
+  <div class="kpis">
+    <div class="kpi"><strong>{{ lesson_count }}</strong><span>已入库课时</span></div>
+    <div class="kpi"><strong>{{ runs_count }}</strong><span>已生成 PPT</span></div>
+    <div class="kpi"><strong>4</strong><span>种 PPT 类型</span></div>
+    <div class="kpi"><strong>{{ model }}</strong><span>生成引擎</span></div>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="/generate">生成 PPT</a>
+    <a class="btn" href="/upload">上传教材</a>
+    {% if lesson_count == 0 %}
+      <button class="btn ghost" id="load-demo-btn">加载示例课时</button>
+    {% endif %}
+  </div>
+  {% if lesson_count == 0 %}
+  <p class="muted small">还没有教材？点上面"加载示例课时"即可体验完整流程（北师大版四下 · 小数加减法 3 节）。</p>
+  {% endif %}
+</section>
+
+<script>
+document.getElementById('load-demo-btn')?.addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = '加载中…';
+  try {
+    const r = await fetch('/api/kb/load_demo', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) { alert('加载失败：' + JSON.stringify(data)); e.target.disabled = false; e.target.textContent = '加载示例课时'; return; }
+    if (data.added_count === 0) alert('示例课时已在知识库中。');
+    location.href = '/generate';
+  } catch (err) { alert('请求失败：' + err.message); e.target.disabled = false; e.target.textContent = '加载示例课时'; }
+});
+</script>
+
+<section class="features">
+  <div class="card">
+    <h3>课时教案</h3>
+    <p>完整授课结构：导入 → 新授 → 练习 → 总结，含讲稿备注。</p>
+  </div>
+  <div class="card">
+    <h3>知识点专项</h3>
+    <p>单一知识点深入讲解，配多层次例题和易错提示。</p>
+  </div>
+  <div class="card">
+    <h3>练习题集</h3>
+    <p>基础 → 变式 → 综合 → 挑战，难度梯度自动安排。</p>
+  </div>
+  <div class="card">
+    <h3>映射教学</h3>
+    <p>强互动 + 动画 hint，让学生在猜想验证中学习。</p>
+  </div>
+</section>
+{% endblock %}

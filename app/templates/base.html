@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}aippt - 小学数学 PPT 生成{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="container nav">
+      <a href="/" class="brand">aippt</a>
+      <nav>
+        <a href="/">首页</a>
+        <a href="/upload">上传教材</a>
+        <a href="/kb">知识库</a>
+        <a href="/generate">生成 PPT</a>
+        <a href="/runs">历史</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="container">
+    <small>aippt · 面向成都市小学数学教师 · 本地运行，教材数据不出本机</small>
+  </footer>
+</body>
+</html>

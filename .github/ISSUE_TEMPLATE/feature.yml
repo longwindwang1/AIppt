@@ -1,0 +1,35 @@
+name: 💡 功能建议
+description: 建议一个新功能或改进
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解决什么问题
+      description: 你遇到了什么痛点？为什么现有功能不够？
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的方案
+      description: 你希望工具怎么工作？画出关键界面 / 命令 / API 也行。
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 这是数学课特有需求，还是通用需求？
+      options:
+        - 小学数学特有（教学法 / 教材结构相关）
+        - 通用 PPT 生成（其他学科也用得上）
+        - 工程改进（CI / 测试 / 性能）
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过哪些替代方案？为什么不用？

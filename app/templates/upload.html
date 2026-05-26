@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}上传教材 · aippt{% endblock %}
+{% block content %}
+<h2>上传教材</h2>
+<p class="muted">支持 PDF、TXT、MD、PNG、JPG。教材文件仅存在本机，不会上传到云端。</p>
+
+<form action="/upload/form" method="post" enctype="multipart/form-data" class="form">
+  <label>教材文件 <input type="file" name="file" required></label>
+
+  <div class="row">
+    <label>年级
+      <select name="grade" required>
+        {% for g in range(1, 7) %}<option value="{{ g }}">{{ g }} 年级</option>{% endfor %}
+      </select>
+    </label>
+    <label>学期
+      <select name="term" required>
+        <option value="1">上册</option>
+        <option value="2">下册</option>
+      </select>
+    </label>
+    <label>单元序号
+      <input type="number" name="unit_index" min="1" max="20" value="1" required>
+    </label>
+  </div>
+
+  <label>单元名称 <input type="text" name="unit_name" placeholder="例如：小数加减法" required></label>
+
+  <label>课时名称 <input type="text" name="lesson_name" placeholder="留空将自动按章节切分"></label>
+
+  <label>知识点（逗号分隔，可选）
+    <input type="text" name="knowledge_points" placeholder="小数加法, 小数减法">
+  </label>
+
+  <button class="btn primary" type="submit">上传并入库</button>
+</form>
+
+<div class="hint-box">
+  <h4>不抓教材正文</h4>
+  <p>小学数学教材正文受版权保护。本工具不会从互联网获取教材内容，你需要自己扫描或拍照后上传。课程标准、公开教案等公开资源由系统联网获取。</p>
+</div>
+{% endblock %}

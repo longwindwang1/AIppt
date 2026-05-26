@@ -1,0 +1,11 @@
+# 跨平台行结尾统一
+* text=auto eol=lf
+
+# 二进制不要改
+*.pptx binary
+*.png binary
+*.jpg binary
+*.pdf binary
+
+# Python 文件用 LF
+*.py text eol=lf

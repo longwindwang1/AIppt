@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}生成历史 · aippt{% endblock %}
+{% block content %}
+<h2>生成历史</h2>
+
+{% if not runs %}
+  <div class="empty">
+    <p>还没有生成过 PPT。<a href="/generate">去生成一个</a>。</p>
+  </div>
+{% else %}
+  <p class="muted small">共 {{ runs | length }} 个 run。点击下载，或删除不再需要的。</p>
+
+  <table class="runs-table">
+    <thead>
+      <tr>
+        <th>时间</th>
+        <th>课题</th>
+        <th>类型</th>
+        <th>主题</th>
+        <th>页数</th>
+        <th>耗时</th>
+        <th>状态</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in runs %}
+      <tr data-run="{{ r.run_id }}">
+        <td class="muted small">{{ r.created_at[5:16] | replace('T', ' ') }}</td>
+        <td>
+          <strong>{{ r.deck_title or (r.unit_name + ' · ' + r.lesson_name) }}</strong>
+          <div class="muted small">{{ r.grade }} 年级 · {{ '上' if r.term == 1 else '下' }}册</div>
+        </td>
+        <td>{{ type_labels.get(r.deck_type, r.deck_type) }}</td>
+        <td>{{ theme_labels.get(r.theme, r.theme) }}</td>
+        <td>{{ r.slide_count or '-' }}</td>
+        <td>{{ r.elapsed_sec }}s</td>
+        <td>
+          {% if r.stage == 'done' %}<span class="badge done">完成</span>
+          {% elif r.stage == 'error' %}<span class="badge error" title="{{ r.error }}">失败</span>
+          {% else %}<span class="badge progress">{{ r.stage }}</span>
+          {% endif %}
+        </td>
+        <td class="actions">
+          {% if r.stage == 'done' %}
+            <a href="/download/{{ r.run_id }}/{{ r.pptx_filename }}" download class="btn small">下载</a>
+          {% endif %}
+          <button class="btn small ghost" onclick="deleteRun('{{ r.run_id }}')">删除</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<script>
+async function deleteRun(runId) {
+  if (!confirm("确认删除该 run？此操作不可撤销。")) return;
+  const r = await fetch(`/api/runs/${runId}`, { method: "DELETE" });
+  if (r.ok) document.querySelector(`tr[data-run="${runId}"]`).remove();
+  else alert("删除失败：" + (await r.text()));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}生成 PPT · aippt{% endblock %}
+{% block content %}
+<h2>生成 PPT</h2>
+
+{% if not tree %}
+  <div class="empty">
+    <p>知识库为空。<a href="/upload">先上传教材</a>，或回 <a href="/">首页加载示例</a>。</p>
+  </div>
+{% else %}
+  <form id="gen-form" class="form">
+    <div class="row">
+      <label>年级
+        <select name="grade" required id="grade-sel">
+          {% for grade_key in tree.keys() %}
+            <option value="{{ grade_key | replace('grade_', '') }}">{{ grade_key | replace('grade_', '') }} 年级</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>学期
+        <select name="term" required id="term-sel">
+          <option value="1">上册</option>
+          <option value="2">下册</option>
+        </select>
+      </label>
+    </div>
+
+    <label>单元 <input list="units" name="unit_name" id="unit-input" required></label>
+    <datalist id="units"></datalist>
+
+    <label>课时 <input list="lessons" name="lesson_name" id="lesson-input" required></label>
+    <datalist id="lessons"></datalist>
+
+    <div class="row">
+      <label>PPT 类型
+        <select name="deck_type" required>
+          <option value="lesson_plan">课时教案</option>
+          <option value="knowledge_point">知识点专项</option>
+          <option value="practice">练习题集</option>
+          <option value="interactive">映射教学（互动/动画）</option>
+        </select>
+      </label>
+      <label>视觉主题
+        <select name="theme" required>
+          {% for key, t in themes.items() %}
+            <option value="{{ key }}">{{ t.label }} · {{ t.best_for() }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label>老师备注（可选）
+      <textarea name="extra_instructions" rows="3" placeholder="例如：重点讲方法 X，避开难度过高的例题"></textarea>
+    </label>
+
+    <button type="submit" class="btn primary" id="submit-btn">生成</button>
+  </form>
+
+  <div id="status" class="status hidden">
+    <div class="status-row">
+      <span id="status-text">排队中…</span>
+      <span id="status-elapsed" class="muted small"></span>
+    </div>
+    <div class="progress"><div id="progress-bar" class="progress-bar"></div></div>
+    <div id="status-result"></div>
+  </div>
+{% endif %}
+
+<script>
+  const tree = {{ tree | tojson }};
+
+  function refreshUnits() {
+    const grade = "grade_" + document.getElementById("grade-sel").value;
+    const term = "term_" + document.getElementById("term-sel").value;
+    const units = (tree[grade] && tree[grade][term]) || {};
+    const dl = document.getElementById("units");
+    dl.innerHTML = "";
+    Object.values(units).forEach(u => {
+      const o = document.createElement("option");
+      o.value = u.name; dl.appendChild(o);
+    });
+    refreshLessons();
+  }
+  function refreshLessons() {
+    const grade = "grade_" + document.getElementById("grade-sel").value;
+    const term = "term_" + document.getElementById("term-sel").value;
+    const unitName = document.getElementById("unit-input").value;
+    const units = (tree[grade] && tree[grade][term]) || {};
+    const dl = document.getElementById("lessons");
+    dl.innerHTML = "";
+    Object.values(units).filter(u => !unitName || u.name === unitName).forEach(u => {
+      (u.lessons || []).forEach(l => {
+        const o = document.createElement("option");
+        o.value = l.name; dl.appendChild(o);
+      });
+    });
+  }
+  document.getElementById("grade-sel")?.addEventListener("change", refreshUnits);
+  document.getElementById("term-sel")?.addEventListener("change", refreshUnits);
+  document.getElementById("unit-input")?.addEventListener("input", refreshLessons);
+  refreshUnits();
+
+  let pollTimer = null;
+
+  async function pollStatus(runId) {
+    try {
+      const r = await fetch(`/api/runs/${runId}/status`);
+      const s = await r.json();
+      if (!r.ok) {
+        showError(s.detail || JSON.stringify(s));
+        clearInterval(pollTimer);
+        return;
+      }
+      document.getElementById("status-text").textContent = s.message || s.stage;
+      document.getElementById("status-elapsed").textContent = `${s.elapsed_sec}s`;
+      document.getElementById("progress-bar").style.width = Math.round((s.progress || 0) * 100) + "%";
+
+      if (s.stage === "done") {
+        clearInterval(pollTimer);
+        document.getElementById("status").classList.add("success");
+        document.getElementById("status-result").innerHTML =
+          `<a class="btn primary" href="${s.pptx_url}" download>⬇ 下载 ${s.deck_title}.pptx</a>
+           &nbsp; <a class="btn" href="/runs">查看所有生成历史</a>`;
+        document.getElementById("submit-btn").disabled = false;
+      } else if (s.stage === "error") {
+        clearInterval(pollTimer);
+        showError(s.error || s.message);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function showError(msg) {
+    const st = document.getElementById("status");
+    st.classList.add("error");
+    document.getElementById("status-result").innerHTML = `<div class="error-detail">${msg}</div>`;
+    document.getElementById("submit-btn").disabled = false;
+  }
+
+  document.getElementById("gen-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      grade: parseInt(fd.get("grade")),
+      term: parseInt(fd.get("term")),
+      unit_name: fd.get("unit_name"),
+      lesson_name: fd.get("lesson_name"),
+      deck_type: fd.get("deck_type"),
+      theme: fd.get("theme"),
+      extra_instructions: fd.get("extra_instructions") || "",
+    };
+    const status = document.getElementById("status");
+    status.classList.remove("hidden", "error", "success");
+    document.getElementById("status-text").textContent = "提交中…";
+    document.getElementById("status-elapsed").textContent = "";
+    document.getElementById("status-result").innerHTML = "";
+    document.getElementById("progress-bar").style.width = "0%";
+    document.getElementById("submit-btn").disabled = true;
+
+    try {
+      const resp = await fetch("/generate", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        showError(data.detail || JSON.stringify(data));
+        return;
+      }
+      const runId = data.run_id;
+      pollTimer = setInterval(() => pollStatus(runId), 1500);
+      pollStatus(runId);
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+</script>
+{% endblock %}

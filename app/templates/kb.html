@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}知识库 · aippt{% endblock %}
+{% block content %}
+<h2>知识库</h2>
+<p class="muted">已入库的教材课时按年级 / 学期 / 单元组织。</p>
+
+{% if not tree %}
+  <div class="empty">
+    <p>知识库为空。<a href="/upload">先上传教材</a> 才能生成 PPT。</p>
+  </div>
+{% else %}
+  {% for grade_key, grade_node in tree.items() %}
+    <section class="grade-block">
+      <h3>{{ grade_key | replace('grade_', '') }} 年级</h3>
+      {% for term_key, term_node in grade_node.items() %}
+        <h4>{{ '上册' if term_key == 'term_1' else '下册' }}</h4>
+        <ul class="unit-list">
+          {% for unit_key, unit_node in term_node.items() %}
+            <li>
+              <strong>{{ unit_node.name or unit_key }}</strong>
+              <ul class="lesson-list">
+                {% for les in unit_node.lessons %}
+                  <li>
+                    {{ les.name }}
+                    {% if les.knowledge_points %}
+                      <span class="kps">[{{ les.knowledge_points | join('，') }}]</span>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    </section>
+  {% endfor %}
+{% endif %}
+{% endblock %}
