@@ -1,0 +1,15 @@
+{
+  "unit": {
+    "grade": 3,
+    "term": 1,
+    "unit_index": 3,
+    "unit_name": "加与减"
+  },
+  "lessons": [
+    {
+      "file": "01_里程表二.md",
+      "name": "里程表（二）",
+      "knowledge_points": ["非 0 起点的减法", "累计量与差量", "线段图表示数量关系"]
+    }
+  ]
+}
