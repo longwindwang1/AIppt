@@ -8,57 +8,74 @@
     <p>还没有生成过 PPT。<a href="/generate">去生成一个</a>。</p>
   </div>
 {% else %}
-  <p class="muted small">共 {{ runs | length }} 个 run。点击下载，或删除不再需要的。</p>
+  <p class="muted small">共 {{ runs | length }} 个 run。点缩略卡可预览 / 下载。</p>
 
-  <table class="runs-table">
-    <thead>
-      <tr>
-        <th>时间</th>
-        <th>课题</th>
-        <th>类型</th>
-        <th>主题</th>
-        <th>页数</th>
-        <th>耗时</th>
-        <th>状态</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody>
+  <div class="runs-grid">
     {% for r in runs %}
-      <tr data-run="{{ r.run_id }}">
-        <td class="muted small">{{ r.created_at[5:16] | replace('T', ' ') }}</td>
-        <td>
-          <strong>{{ r.deck_title or (r.unit_name + ' · ' + r.lesson_name) }}</strong>
-          <div class="muted small">{{ r.grade }} 年级 · {{ '上' if r.term == 1 else '下' }}册</div>
-        </td>
-        <td>{{ type_labels.get(r.deck_type, r.deck_type) }}</td>
-        <td>{{ theme_labels.get(r.theme, r.theme) }}</td>
-        <td>{{ r.slide_count or '-' }}</td>
-        <td>{{ r.elapsed_sec }}s</td>
-        <td>
-          {% if r.stage == 'done' %}<span class="badge done">完成</span>
-          {% elif r.stage == 'error' %}<span class="badge error" title="{{ r.error }}">失败</span>
-          {% else %}<span class="badge progress">{{ r.stage }}</span>
-          {% endif %}
-        </td>
-        <td class="actions">
-          {% if r.stage == 'done' %}
-            <a href="/download/{{ r.run_id }}/{{ r.pptx_filename }}" download class="btn small">下载</a>
-          {% endif %}
-          <button class="btn small ghost" onclick="deleteRun('{{ r.run_id }}')">删除</button>
-        </td>
-      </tr>
+      {% set t = theme_meta.get(r.theme, theme_meta['formal_blue']) %}
+      <div class="run-card" data-run="{{ r.run_id }}">
+        <a href="/runs/{{ r.run_id }}/preview" class="run-thumb"
+           style="--c-title: {{ t.title_hex }}; --c-accent: {{ t.accent_hex }}; --c-bg: {{ t.bg_hex }}; --c-fg: {{ t.title_fg_hex }}">
+          <div class="thumb-bar">{{ r.deck_title[:30] if r.deck_title else (r.unit_name + ' · ' + r.lesson_name) }}</div>
+          <div class="thumb-body">
+            <div class="thumb-accent"></div>
+            <div class="thumb-info">
+              <strong>{{ type_labels.get(r.deck_type, r.deck_type) }}</strong>
+              <span class="thumb-meta">{{ r.grade }} 年级 · {{ '上' if r.term == 1 else '下' }}册</span>
+              <span class="thumb-meta">{{ r.slide_count or '-' }} 页 · {{ t.label }}</span>
+            </div>
+          </div>
+        </a>
+        <div class="run-meta">
+          <div class="muted small">{{ r.created_at[5:16] | replace('T', ' ') }} · {{ r.elapsed_sec }}s</div>
+          <div class="run-actions">
+            {% if r.stage == 'done' %}
+              <a href="/download/{{ r.run_id }}/{{ r.pptx_filename }}" download class="btn small">下载</a>
+              <a href="/runs/{{ r.run_id }}/preview" class="btn small ghost">预览</a>
+            {% elif r.stage == 'error' %}
+              <span class="badge error" title="{{ r.error }}">失败</span>
+            {% else %}
+              <span class="badge progress">{{ r.stage }}</span>
+            {% endif %}
+            <button class="btn small ghost" onclick="deleteRun('{{ r.run_id }}')">删</button>
+          </div>
+        </div>
+      </div>
     {% endfor %}
-    </tbody>
-  </table>
+  </div>
 {% endif %}
 
 <script>
 async function deleteRun(runId) {
   if (!confirm("确认删除该 run？此操作不可撤销。")) return;
   const r = await fetch(`/api/runs/${runId}`, { method: "DELETE" });
-  if (r.ok) document.querySelector(`tr[data-run="${runId}"]`).remove();
+  if (r.ok) document.querySelector(`[data-run="${runId}"]`).remove();
   else alert("删除失败：" + (await r.text()));
 }
 </script>
+
+<style>
+.runs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+.run-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+
+.run-thumb {
+  display: block; aspect-ratio: 16/9; background: var(--c-bg);
+  text-decoration: none; color: var(--c-fg);
+  display: flex; flex-direction: column;
+  border-bottom: 1px solid var(--border);
+}
+.thumb-bar {
+  background: var(--c-title); color: var(--c-fg);
+  padding: 6px 10px; font-size: 12px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.thumb-body { flex: 1; display: flex; padding: 12px; position: relative; color: var(--text); }
+.thumb-accent { width: 4px; background: var(--c-accent); margin-right: 10px; }
+.thumb-info { display: flex; flex-direction: column; gap: 2px; }
+.thumb-info strong { font-size: 14px; color: var(--c-title); }
+.thumb-meta { font-size: 11px; color: var(--muted); }
+
+.run-meta { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
+.run-actions { display: flex; gap: 4px; align-items: center; }
+</style>
 {% endblock %}

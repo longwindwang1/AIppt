@@ -49,6 +49,14 @@
       </label>
     </div>
 
+    <label>学情（影响例题难度梯度）
+      <select name="class_level">
+        <option value="normal" selected>普通班 · 难度适中</option>
+        <option value="advanced">拔尖班 · 例题上调一档 + 挑战题</option>
+        <option value="basic">基础班 · 步骤更细 + 多用动画展开</option>
+      </select>
+    </label>
+
     <label>老师备注（可选）
       <textarea name="extra_instructions" rows="3" placeholder="例如：重点讲方法 X，避开难度过高的例题"></textarea>
     </label>
@@ -119,8 +127,9 @@
         clearInterval(pollTimer);
         document.getElementById("status").classList.add("success");
         document.getElementById("status-result").innerHTML =
-          `<a class="btn primary" href="${s.pptx_url}" download>⬇ 下载 ${s.deck_title}.pptx</a>
-           &nbsp; <a class="btn" href="/runs">查看所有生成历史</a>`;
+          `<a class="btn primary" href="${s.pptx_url}" download>⬇ 下载 .pptx</a>
+           &nbsp; <a class="btn" href="/runs/${runId}/preview">👁 预览大纲</a>
+           &nbsp; <a class="btn" href="/runs">所有历史</a>`;
         document.getElementById("submit-btn").disabled = false;
       } else if (s.stage === "error") {
         clearInterval(pollTimer);
@@ -148,6 +157,7 @@
       lesson_name: fd.get("lesson_name"),
       deck_type: fd.get("deck_type"),
       theme: fd.get("theme"),
+      class_level: fd.get("class_level") || "normal",
       extra_instructions: fd.get("extra_instructions") || "",
     };
     const status = document.getElementById("status");

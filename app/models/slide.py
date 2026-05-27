@@ -58,6 +58,30 @@ class Deck(BaseModel):
         return f"{safe}.pptx"
 
 
+_SLIDE_OBJ_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["title", "section", "content", "example", "practice", "interactive", "summary"],
+        },
+        "title": {"type": "string"},
+        "subtitle": {"type": "string"},
+        "bullets": {"type": "array", "items": {"type": "string"}},
+        "notes": {"type": "string", "description": "讲稿，写进 PPT 备注栏"},
+        "animation": {
+            "type": "string",
+            "enum": ["none", "reveal_on_click", "step_by_step", "highlight_answer"],
+        },
+        "question": {"type": "string"},
+        "solution_steps": {"type": "array", "items": {"type": "string"}},
+        "answer": {"type": "string"},
+        "hint": {"type": "string"},
+    },
+    "required": ["type"],
+}
+
+
 # JSON Schema 给 Sonnet 的 tool_use（手写，避免 Pydantic 自动 schema 带太多噪音）
 DECK_TOOL_SCHEMA = {
     "name": "emit_deck",
@@ -77,30 +101,17 @@ DECK_TOOL_SCHEMA = {
             "slides": {
                 "type": "array",
                 "minItems": 5,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "type": {
-                            "type": "string",
-                            "enum": ["title", "section", "content", "example", "practice", "interactive", "summary"],
-                        },
-                        "title": {"type": "string"},
-                        "subtitle": {"type": "string"},
-                        "bullets": {"type": "array", "items": {"type": "string"}},
-                        "notes": {"type": "string", "description": "讲稿，写进 PPT 备注栏，教师讲课时参考"},
-                        "animation": {
-                            "type": "string",
-                            "enum": ["none", "reveal_on_click", "step_by_step", "highlight_answer"],
-                        },
-                        "question": {"type": "string"},
-                        "solution_steps": {"type": "array", "items": {"type": "string"}},
-                        "answer": {"type": "string"},
-                        "hint": {"type": "string"},
-                    },
-                    "required": ["type"],
-                },
+                "items": _SLIDE_OBJ_SCHEMA,
             },
         },
         "required": ["title", "grade", "term", "unit_name", "lesson_name", "deck_type", "slides"],
     },
+}
+
+
+# 单页重生成用的 tool schema
+SLIDE_TOOL_SCHEMA = {
+    "name": "emit_slide",
+    "description": "重新生成 PPT 中的某一页。只输出这一页的结构，不输出整 deck。",
+    "input_schema": _SLIDE_OBJ_SCHEMA,
 }

@@ -31,6 +31,7 @@ class GenerateBody(BaseModel):
     lesson_id: str | None = None
     extra_instructions: str = ""
     theme: str = "formal_blue"
+    class_level: str = Field(default="normal", pattern="^(advanced|normal|basic)$")
 
 
 class GenerateAck(BaseModel):
@@ -39,8 +40,9 @@ class GenerateAck(BaseModel):
 
 
 def _pipeline(run_id: str, body: GenerateBody) -> None:
-    """后台跑：Sonnet → 渲染 → 写 done/error。"""
-    runs_service.update(run_id, stage="thinking", message="正在调用 Sonnet 生成大纲…", progress=0.1)
+    """后台跑：Sonnet → 渲染 → 写 done/error。状态消息按阶段细化。"""
+    runs_service.update(run_id, stage="thinking", progress=0.05,
+                        message="读取课时正文和课程标准…")
 
     try:
         lesson_content = kb_service.get_lesson_content(
@@ -49,11 +51,20 @@ def _pipeline(run_id: str, body: GenerateBody) -> None:
             lesson_id=body.lesson_id,
         )
         standard_excerpt = kb_service.get_standard_for_grade(body.grade)
+
+        type_label = {
+            "lesson_plan": "课时教案", "knowledge_point": "知识点专项",
+            "practice": "练习题集", "interactive": "映射教学",
+        }.get(body.deck_type, body.deck_type)
+        runs_service.update(run_id, progress=0.15,
+                            message=f"Sonnet 正在设计《{body.lesson_name}》{type_label}大纲…")
+
         req = GenerationRequest(
             deck_type=body.deck_type, grade=body.grade, term=body.term,
             unit_name=body.unit_name, lesson_name=body.lesson_name,
             lesson_content=lesson_content, standard_excerpt=standard_excerpt,
             extra_instructions=body.extra_instructions,
+            class_level=body.class_level,
         )
         deck = generate_deck(req)
     except GenerationError as e:
@@ -64,8 +75,9 @@ def _pipeline(run_id: str, body: GenerateBody) -> None:
         runs_service.update(run_id, stage="error", message=f"未预期异常：{e}", error=str(e))
         return
 
-    runs_service.update(run_id, stage="rendering", message="正在渲染 .pptx…",
-                        progress=0.7, deck_title=deck.title, slide_count=len(deck.slides))
+    runs_service.update(run_id, stage="rendering",
+                        message=f"已生成 {len(deck.slides)} 页大纲，正在排版 .pptx…",
+                        progress=0.75, deck_title=deck.title, slide_count=len(deck.slides))
 
     try:
         run_dir = settings.runs_dir / run_id
@@ -76,7 +88,8 @@ def _pipeline(run_id: str, body: GenerateBody) -> None:
         return
 
     runs_service.update(
-        run_id, stage="done", message="生成完成",
+        run_id, stage="done",
+        message=f"生成完成 · {len(deck.slides)} 页 · 主题：{body.theme}",
         progress=1.0, pptx_filename=pptx_path.name,
     )
 

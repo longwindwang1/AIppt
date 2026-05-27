@@ -92,6 +92,95 @@ def test_invalid_theme_rejected(app_client):
     assert r.status_code == 400
 
 
+def test_preview_page(app_client):
+    """完成生成后 /runs/{id}/preview 能渲染。"""
+    app_client.post("/api/kb/load_demo")
+    r = app_client.post("/generate", json={
+        "deck_type": "knowledge_point", "grade": 4, "term": 2,
+        "unit_name": "小数加减法", "lesson_name": "小数的意义",
+        "theme": "blackboard", "class_level": "advanced",
+    })
+    run_id = r.json()["run_id"]
+    for _ in range(20):
+        if app_client.get(f"/api/runs/{run_id}/status").json()["stage"] == "done":
+            break
+        time.sleep(0.5)
+
+    r = app_client.get(f"/runs/{run_id}/preview")
+    assert r.status_code == 200
+    # 应该包含 deck 标题和"重生成"按钮
+    assert "重生成本页" in r.text
+    assert "[Mock]" in r.text or "知识点" in r.text
+
+
+def test_slide_regenerate(app_client):
+    app_client.post("/api/kb/load_demo")
+    r = app_client.post("/generate", json={
+        "deck_type": "lesson_plan", "grade": 4, "term": 2,
+        "unit_name": "小数加减法", "lesson_name": "买菜",
+        "theme": "formal_blue",
+    })
+    run_id = r.json()["run_id"]
+    for _ in range(20):
+        if app_client.get(f"/api/runs/{run_id}/status").json()["stage"] == "done":
+            break
+        time.sleep(0.5)
+
+    r = app_client.post(f"/runs/{run_id}/slides/2/regenerate", json={
+        "instructions": "把例题换成单价情境",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["slide_idx"] == 2
+    assert "[已修订]" in body["new_slide"]["title"] or "修订指示" in body["new_slide"]["notes"]
+
+    # edits.jsonl 应有审计记录
+    from app.config import settings
+    edits = settings.runs_dir / run_id / "edits.jsonl"
+    assert edits.exists()
+    assert "把例题换成单价" in edits.read_text(encoding="utf-8")
+
+
+def test_class_level_in_request(app_client):
+    """class_level 应被接受并传递（mock 模式下不影响内容）。"""
+    app_client.post("/api/kb/load_demo")
+    for level in ["advanced", "normal", "basic"]:
+        r = app_client.post("/generate", json={
+            "deck_type": "lesson_plan", "grade": 4, "term": 2,
+            "unit_name": "小数加减法", "lesson_name": "买菜",
+            "theme": "formal_blue", "class_level": level,
+        })
+        assert r.status_code == 200
+
+    # 非法 class_level 应被 Pydantic 拒
+    r = app_client.post("/generate", json={
+        "deck_type": "lesson_plan", "grade": 4, "term": 2,
+        "unit_name": "X", "lesson_name": "Y", "theme": "formal_blue",
+        "class_level": "genius",
+    })
+    assert r.status_code == 422
+
+
+def test_mock_diversity(app_client):
+    """4 种 deck_type 各返回不同样本。"""
+    app_client.post("/api/kb/load_demo")
+    titles = set()
+    for dt in ["lesson_plan", "knowledge_point", "practice", "interactive"]:
+        r = app_client.post("/generate", json={
+            "deck_type": dt, "grade": 4, "term": 2,
+            "unit_name": "U", "lesson_name": "L", "theme": "formal_blue",
+        })
+        run_id = r.json()["run_id"]
+        for _ in range(20):
+            s = app_client.get(f"/api/runs/{run_id}/status").json()
+            if s["stage"] == "done":
+                titles.add(s["deck_title"])
+                break
+            time.sleep(0.3)
+    # 4 种类型应产出不同标题（标题里有类型 label）
+    assert len(titles) == 4
+
+
 def test_run_delete(app_client):
     app_client.post("/api/kb/load_demo")
     r = app_client.post("/generate", json={

@@ -5,11 +5,13 @@
 - 通过 tool_use 强制结构化输出，schema 来自 models.slide.DECK_TOOL_SCHEMA
 - web_search 工具默认开启，由 settings.enable_web_search 控制
 - 失败时透传 stop_reason，不要静默吞错
-- AIPPT_MOCK=1 时跳过 Sonnet，返回示例 Deck（CI / 无 key 演示用）
+- AIPPT_MOCK=1 时跳过 Sonnet，按 deck_type 返回不同示例 Deck
+- 学情自适应：req.class_level 控制难度方向
 """
 from __future__ import annotations
 
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,19 +19,20 @@ from anthropic import Anthropic
 from anthropic.types import Message
 
 from app.config import PROJECT_ROOT, settings
-from app.models.slide import DECK_TOOL_SCHEMA, Deck
+from app.models.slide import DECK_TOOL_SCHEMA, SLIDE_TOOL_SCHEMA, Deck, Slide
 
 
 @dataclass
 class GenerationRequest:
-    deck_type: str          # lesson_plan / knowledge_point / practice / interactive
+    deck_type: str
     grade: int
     term: int
     unit_name: str
     lesson_name: str
-    lesson_content: str     # 教材正文（用户上传后从 KB 取）
-    standard_excerpt: str = ""   # 对应课程标准条目（可选）
-    extra_instructions: str = "" # 老师自由备注（如"重点讲方法 X"）
+    lesson_content: str
+    standard_excerpt: str = ""
+    extra_instructions: str = ""
+    class_level: str = "normal"      # advanced / normal / basic
 
 
 class GenerationError(RuntimeError):
@@ -39,63 +42,22 @@ class GenerationError(RuntimeError):
         self.raw = raw
 
 
-def _load_prompt(deck_type: str) -> str:
-    path = settings.prompts_dir / f"{deck_type}.md"
-    if not path.exists():
-        raise GenerationError(f"未找到 PPT 类型 {deck_type} 对应的 prompt 文件: {path}")
-    return path.read_text(encoding="utf-8")
+_MOCK_DECKS_PATH = PROJECT_ROOT / "samples" / "mock_decks.json"
 
 
-def _build_user_message(req: GenerationRequest) -> str:
-    parts = [
-        f"年级：{req.grade}",
-        f"学期：{'上册' if req.term == 1 else '下册'}",
-        f"单元：{req.unit_name}",
-        f"课时：{req.lesson_name}",
-        f"PPT 类型：{req.deck_type}",
-        "",
-        "## 课时正文（来自老师上传的教材）",
-        req.lesson_content.strip() or "（老师尚未上传该课时教材，请基于课程标准和你自身知识生成）",
-    ]
-    if req.standard_excerpt.strip():
-        parts += ["", "## 对应课程标准条目", req.standard_excerpt.strip()]
-    if req.extra_instructions.strip():
-        parts += ["", "## 老师备注", req.extra_instructions.strip()]
-    parts += ["", "请调用 emit_deck 工具输出 PPT 结构。"]
-    return "\n".join(parts)
-
-
-def _tools() -> list[dict]:
-    tools: list[dict] = [DECK_TOOL_SCHEMA]
-    if settings.enable_web_search:
-        tools.append({
-            "type": "web_search_20250305",
-            "name": "web_search",
-            "max_uses": 3,
-        })
-    return tools
-
-
-def _extract_deck(msg: Message) -> Deck:
-    """从 Sonnet 响应中找出 emit_deck tool_use 块。"""
-    for block in msg.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "emit_deck":
-            return Deck.model_validate(block.input)
-    raise GenerationError(
-        f"Sonnet 未调用 emit_deck 工具。stop_reason={msg.stop_reason}",
-        stop_reason=msg.stop_reason,
-        raw=msg,
-    )
-
-
-_MOCK_FIXTURE = PROJECT_ROOT / "tests" / "fixtures" / "sample_deck.json"
+def _load_mock_decks() -> dict:
+    if not _MOCK_DECKS_PATH.exists():
+        # 兜底：用 fixture
+        fixture = PROJECT_ROOT / "tests" / "fixtures" / "sample_deck.json"
+        return {"lesson_plan": json.loads(fixture.read_text(encoding="utf-8"))}
+    return json.loads(_MOCK_DECKS_PATH.read_text(encoding="utf-8"))
 
 
 def _generate_mock(req: GenerationRequest) -> Deck:
-    """Mock 模式：从 fixture 读 Deck，把请求字段替换进去。"""
-    if not _MOCK_FIXTURE.exists():
-        raise GenerationError(f"Mock fixture 不存在：{_MOCK_FIXTURE}")
-    raw = json.loads(_MOCK_FIXTURE.read_text(encoding="utf-8"))
+    """Mock 模式：按 deck_type 选不同样本 deck，注入用户请求的元数据。"""
+    decks = _load_mock_decks()
+    raw = decks.get(req.deck_type) or decks.get("lesson_plan") or next(iter(decks.values()))
+    raw = dict(raw)   # 浅拷贝避免污染
     raw["grade"] = req.grade
     raw["term"] = req.term
     raw["unit_name"] = req.unit_name
@@ -111,6 +73,62 @@ def _generate_mock(req: GenerationRequest) -> Deck:
     return Deck.model_validate(raw)
 
 
+def _load_prompt(deck_type: str) -> str:
+    path = settings.prompts_dir / f"{deck_type}.md"
+    if not path.exists():
+        raise GenerationError(f"未找到 PPT 类型 {deck_type} 对应的 prompt 文件: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+_CLASS_LEVEL_GUIDE = {
+    "advanced": "本班学情：拔尖班。例题难度上调一档，至少留 1 个有挑战的拓展题；少给具体提示，多让学生自主发现规律。",
+    "normal": "本班学情：普通班。难度适中，例题 + 变式 + 一个略具挑战题。",
+    "basic": "本班学情：基础班。例题难度下调，每步骤拆得更细，多用 reveal_on_click 让讲解节奏放慢，提示语言更具体。",
+}
+
+
+def _build_user_message(req: GenerationRequest) -> str:
+    parts = [
+        f"年级：{req.grade}",
+        f"学期：{'上册' if req.term == 1 else '下册'}",
+        f"单元：{req.unit_name}",
+        f"课时：{req.lesson_name}",
+        f"PPT 类型：{req.deck_type}",
+        f"学情：{_CLASS_LEVEL_GUIDE.get(req.class_level, _CLASS_LEVEL_GUIDE['normal'])}",
+        "",
+        "## 课时正文（来自老师上传的教材）",
+        req.lesson_content.strip() or "（老师尚未上传该课时教材，请基于课程标准和你自身知识生成）",
+    ]
+    if req.standard_excerpt.strip():
+        parts += ["", "## 对应课程标准条目", req.standard_excerpt.strip()]
+    if req.extra_instructions.strip():
+        parts += ["", "## 老师备注", req.extra_instructions.strip()]
+    parts += ["", "请调用 emit_deck 工具输出 PPT 结构。"]
+    return "\n".join(parts)
+
+
+def _tools(extra: list[dict] | None = None) -> list[dict]:
+    tools: list[dict] = list(extra or [])
+    if settings.enable_web_search:
+        tools.append({
+            "type": "web_search_20250305",
+            "name": "web_search",
+            "max_uses": 3,
+        })
+    return tools
+
+
+def _extract_tool_input(msg: Message, tool_name: str) -> dict:
+    for block in msg.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
+            return block.input
+    raise GenerationError(
+        f"Sonnet 未调用 {tool_name} 工具。stop_reason={msg.stop_reason}",
+        stop_reason=msg.stop_reason,
+        raw=msg,
+    )
+
+
 def generate_deck(req: GenerationRequest) -> Deck:
     """同步调用 Sonnet，返回解析后的 Deck。Mock 模式跳过 Sonnet。"""
     if settings.mock:
@@ -123,62 +141,123 @@ def generate_deck(req: GenerationRequest) -> Deck:
     system = _load_prompt(req.deck_type)
     user = _build_user_message(req)
 
+    tool_choice = (
+        {"type": "auto"}
+        if settings.enable_web_search
+        else {"type": "tool", "name": "emit_deck"}
+    )
+
     msg = client.messages.create(
         model=settings.model,
         max_tokens=settings.max_tokens,
         system=system,
-        tools=_tools(),
-        tool_choice={"type": "tool", "name": "emit_deck"} if not settings.enable_web_search else {"type": "auto"},
+        tools=_tools([DECK_TOOL_SCHEMA]),
+        tool_choice=tool_choice,
         messages=[{"role": "user", "content": user}],
     )
 
-    # web_search 可能让模型先 search 再 emit_deck，必要时多轮
-    if msg.stop_reason == "tool_use" and not _has_emit_deck(msg):
-        msg = _continue_until_deck(client, system, user, msg)
+    if msg.stop_reason == "tool_use" and not _has_tool(msg, "emit_deck"):
+        msg = _continue_until(client, system, user, msg, "emit_deck",
+                              tools=_tools([DECK_TOOL_SCHEMA]))
 
-    return _extract_deck(msg)
+    return Deck.model_validate(_extract_tool_input(msg, "emit_deck"))
 
 
-def _has_emit_deck(msg: Message) -> bool:
+def _has_tool(msg: Message, name: str) -> bool:
     return any(
-        getattr(b, "type", None) == "tool_use" and b.name == "emit_deck"
+        getattr(b, "type", None) == "tool_use" and b.name == name
         for b in msg.content
     )
 
 
-def _continue_until_deck(client: Anthropic, system: str, user: str, msg: Message,
-                          max_rounds: int = 4) -> Message:
-    """处理 web_search 多轮：把 search 结果反馈回去，直到模型调用 emit_deck。"""
+def _continue_until(client: Anthropic, system: str, user: str, msg: Message,
+                     target_tool: str, tools: list[dict], max_rounds: int = 4) -> Message:
     history: list[dict] = [
         {"role": "user", "content": user},
         {"role": "assistant", "content": msg.content},
     ]
-
     for _ in range(max_rounds):
-        # 收集所有 server-side tool_use 的 tool_use_id（web_search 是 server tool，
-        # 结果已经回流到 content 里；我们这里其实不需要回 tool_result。
-        # 但如果 Sonnet 还在等更多 server tool 轮次，let it run）
-        # 简化处理：如果它没产出 emit_deck，再发一条 user 消息催它。
         history.append({
             "role": "user",
-            "content": "请基于已搜索到的信息，立即调用 emit_deck 工具输出 PPT 结构。",
+            "content": f"请基于已搜索到的信息，立即调用 {target_tool} 工具输出结果。",
         })
         msg = client.messages.create(
             model=settings.model,
             max_tokens=settings.max_tokens,
             system=system,
-            tools=_tools(),
+            tools=tools,
             messages=history,
         )
-        if _has_emit_deck(msg):
+        if _has_tool(msg, target_tool):
             return msg
         history.append({"role": "assistant", "content": msg.content})
-
     return msg
 
 
+# --- 单页重生成 -----------------------------------------------------------
+
+
+_SLIDE_REGEN_SYSTEM = """你是一位资深小学数学教师。任务：重新生成一份已存在 PPT 中的某一页。
+
+注意：
+- 必须调用 emit_slide 工具输出**单页**结构
+- 保持整体风格 / 难度梯度与原 deck 一致
+- 老师的修改诉求（用户消息中"修改要求"）优先级最高
+- 不要改变 slide 的 type，除非用户明确要求
+"""
+
+
+def _mock_regenerate_slide(req: GenerationRequest, deck: Deck, idx: int) -> Slide:
+    """Mock 模式：把指示词附到 notes 末尾，title 加 [已修订]。"""
+    s = deck.slides[idx].model_copy()
+    s.title = f"[已修订] {s.title}" if s.title else "[已修订]"
+    note_suffix = f"\n\n[修订指示] {req.extra_instructions}" if req.extra_instructions else "\n\n[已模拟重生成]"
+    s.notes = (s.notes or "") + note_suffix
+    return s
+
+
+def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> Slide:
+    """重新生成 deck 第 idx 页。返回新的 Slide。"""
+    if settings.mock:
+        return _mock_regenerate_slide(req, deck, idx)
+
+    if not settings.anthropic_api_key:
+        raise GenerationError("未配置 ANTHROPIC_API_KEY")
+
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    original = deck.slides[idx]
+    user = "\n".join([
+        f"# 整 deck 上下文（共 {len(deck.slides)} 页）",
+        f"课题：{deck.title}",
+        f"PPT 类型：{deck.deck_type}",
+        f"学情：{_CLASS_LEVEL_GUIDE.get(req.class_level, '')}",
+        "",
+        f"# 需要重生成的是第 {idx + 1} 页（从 1 计数）",
+        "## 原始页结构",
+        original.model_dump_json(indent=2, exclude_defaults=True),
+        "",
+        "## 同 deck 中前后页的标题（保持衔接）",
+        *(f"- 第 {i+1} 页: {s.title or s.type} ({s.type})" for i, s in enumerate(deck.slides)),
+        "",
+        "## 修改要求",
+        req.extra_instructions or "（无具体要求，请按原页主题重新生成，质量更好的版本）",
+        "",
+        "请调用 emit_slide 工具输出新的单页结构。",
+    ])
+
+    msg = client.messages.create(
+        model=settings.model,
+        max_tokens=2048,
+        system=_SLIDE_REGEN_SYSTEM,
+        tools=[SLIDE_TOOL_SCHEMA],
+        tool_choice={"type": "tool", "name": "emit_slide"},
+        messages=[{"role": "user", "content": user}],
+    )
+
+    return Slide.model_validate(_extract_tool_input(msg, "emit_slide"))
+
+
 def save_deck_json(deck: Deck, run_dir: Path) -> Path:
-    """把生成的 Deck JSON 也存一份到 runs/，方便调试。"""
     run_dir.mkdir(parents=True, exist_ok=True)
     path = run_dir / "deck.json"
     path.write_text(deck.model_dump_json(indent=2), encoding="utf-8")

@@ -22,6 +22,12 @@ from app.models.slide import AnimationHint, Deck, Slide, SlideType
 
 # --- 主题系统 ---------------------------------------------------------------
 
+def _rgb_to_hex(c: RGBColor | None) -> str:
+    if c is None:
+        return "#ffffff"
+    return "#" + bytes(c).hex()
+
+
 @dataclass(frozen=True)
 class Theme:
     key: str
@@ -44,6 +50,20 @@ class Theme:
             "kids_warm": "低年级日常课，活泼亲切",
             "blackboard": "复习课，黑板感强",
         }.get(self.key, "")
+
+    # 给 Jinja2 用：转 hex 字符串。RGBColor 不能直接传 CSS。
+    @property
+    def title_hex(self) -> str: return _rgb_to_hex(self.title_color)
+    @property
+    def accent_hex(self) -> str: return _rgb_to_hex(self.accent_color)
+    @property
+    def text_hex(self) -> str: return _rgb_to_hex(self.text_color)
+    @property
+    def muted_hex(self) -> str: return _rgb_to_hex(self.muted_color)
+    @property
+    def bg_hex(self) -> str: return _rgb_to_hex(self.bg_color) if self.bg_color else "#ffffff"
+    @property
+    def title_fg_hex(self) -> str: return _rgb_to_hex(self.title_bar_text_color)
 
 
 _FORMAL_BLUE = Theme(

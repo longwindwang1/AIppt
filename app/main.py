@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from app.config import PROJECT_ROOT, settings
-from app.routers import download, generate, kb, upload
+from app.routers import download, generate, kb, preview, upload
 from app.services.render import THEMES
 
 app = FastAPI(title="aippt", description="成都市小学数学 PPT 自动生成", version="0.1.0")
@@ -20,6 +20,7 @@ app.include_router(upload.router)
 app.include_router(kb.router)
 app.include_router(generate.router)
 app.include_router(download.router)
+app.include_router(preview.router)
 
 
 @app.get("/healthz")
@@ -92,5 +93,11 @@ def runs_page(request: Request) -> HTMLResponse:
             "practice": "练习题集",
             "interactive": "映射教学",
         },
-        "theme_labels": {k: t.label for k, t in THEMES.items()},
+        "theme_meta": {
+            k: {
+                "label": t.label,
+                "title_hex": t.title_hex, "accent_hex": t.accent_hex,
+                "bg_hex": t.bg_hex, "title_fg_hex": t.title_fg_hex,
+            } for k, t in THEMES.items()
+        },
     })

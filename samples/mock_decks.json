@@ -1,0 +1,64 @@
+{
+  "lesson_plan": {
+    "title": "[Mock] 课时教案 演示",
+    "grade": 4, "term": 2,
+    "unit_name": "小数加减法", "lesson_name": "买菜",
+    "deck_type": "lesson_plan",
+    "slides": [
+      {"type": "title", "title": "买菜", "subtitle": "课时教案 · 北师大版四下 · 第三单元", "notes": "出示课题，引导学生回顾上节课内容。"},
+      {"type": "section", "title": "一、复习导入", "bullets": ["回顾小数意义", "唤起整数加减经验"]},
+      {"type": "content", "title": "菜市场里的小数", "bullets": ["白菜 2.5 元/斤", "番茄 3.8 元/斤", "豆腐 1.5 元/块"], "animation": "reveal_on_click", "notes": "问学生：你在菜场见过哪些小数标价？"},
+      {"type": "example", "title": "例 1", "question": "买 1 斤白菜和 1 斤番茄共多少元？", "solution_steps": ["列竖式 2.5 + 3.8", "小数点对齐", "十分位 5+8=13 进 1", "个位 2+3+1=6"], "answer": "6.3 元", "animation": "step_by_step"},
+      {"type": "practice", "title": "课堂练习", "question": "小明买文具 4.6 元，零食 2.7 元，共多少元？", "hint": "小数点对齐", "notes": "答案 7.3 元，2 分钟独立完成。"},
+      {"type": "interactive", "title": "想一想", "question": "为什么小数加减要小数点对齐？", "hint": "想想相同数位的意义", "notes": "引导学生说出相同数位才能相加减。"},
+      {"type": "summary", "title": "课堂小结", "bullets": ["小数点对齐", "相同数位相加减", "结果小数点也对齐"], "animation": "reveal_on_click"}
+    ]
+  },
+  "knowledge_point": {
+    "title": "[Mock] 知识点专项 演示",
+    "grade": 4, "term": 2,
+    "unit_name": "小数加减法", "lesson_name": "小数的意义",
+    "deck_type": "knowledge_point",
+    "slides": [
+      {"type": "title", "title": "小数的意义", "subtitle": "知识点专项 · 北师大版四下", "notes": "用于单元复习课。"},
+      {"type": "section", "title": "一、知识溯源"},
+      {"type": "content", "title": "从整数到小数", "bullets": ["1 元 = 10 角", "1 角 = 0.1 元", "1 分 = 0.01 元"], "animation": "reveal_on_click"},
+      {"type": "content", "title": "小数的核心要素", "bullets": ["整数部分", "小数点", "小数部分（十分位/百分位/千分位）"]},
+      {"type": "example", "title": "例 · 读写", "question": "2.45 由几个 1，几个 0.1，几个 0.01 组成？", "solution_steps": ["整数部分 2 = 2 个 1", "十分位 4 = 4 个 0.1", "百分位 5 = 5 个 0.01"], "answer": "2 个 1 + 4 个 0.1 + 5 个 0.01", "animation": "step_by_step"},
+      {"type": "content", "title": "易错点", "bullets": ["把 0.05 读成零点五", "小数末尾 0 影响大小（不影响）", "整数部分 0 不能漏"]},
+      {"type": "practice", "title": "巩固练习", "question": "写出 3 个组成形如 a 个 1 + b 个 0.1 的小数", "hint": "想想钱"},
+      {"type": "summary", "title": "本节小结", "bullets": ["小数 = 整数部分 + 小数部分", "数位有意义", "末尾 0 不改变大小"], "animation": "reveal_on_click"}
+    ]
+  },
+  "practice": {
+    "title": "[Mock] 练习题集 演示",
+    "grade": 4, "term": 2,
+    "unit_name": "小数加减法", "lesson_name": "综合练习",
+    "deck_type": "practice",
+    "slides": [
+      {"type": "title", "title": "小数加减法 · 综合练习", "subtitle": "练习题集 · 北师大版四下", "notes": "30~40 分钟的练习课。"},
+      {"type": "section", "title": "题型分布", "bullets": ["基础口算 / 笔算", "变式 / 综合应用", "挑战题"]},
+      {"type": "practice", "title": "基础 · 1", "question": "口算：0.3 + 0.6 = ?", "hint": "数十分位", "notes": "答案 0.9"},
+      {"type": "practice", "title": "基础 · 2", "question": "笔算：4.6 + 2.7 = ?", "hint": "竖式对齐", "notes": "答案 7.3"},
+      {"type": "practice", "title": "变式", "question": "1.58 - 1.4 = ? （注意数位）", "hint": "末尾添 0 看看", "notes": "答案 0.18"},
+      {"type": "example", "title": "综合", "question": "妈妈给 20 元，买 6.5 元的菜和 4.8 元的水果，找回多少？", "solution_steps": ["先算总开支 6.5 + 4.8 = 11.3", "再算找回 20 - 11.3 = 8.7"], "answer": "8.7 元", "animation": "step_by_step"},
+      {"type": "practice", "title": "挑战", "question": "三个数 a, b, c 都是一位小数，和为 5.5。请写出两组可能的解。", "hint": "可以等分，也可以不等"},
+      {"type": "summary", "title": "易错回顾", "bullets": ["小数点对齐", "数位不同要补 0", "退位减法不忘借位"], "animation": "reveal_on_click"}
+    ]
+  },
+  "interactive": {
+    "title": "[Mock] 映射教学 演示",
+    "grade": 4, "term": 2,
+    "unit_name": "小数加减法", "lesson_name": "猜数游戏",
+    "deck_type": "interactive",
+    "slides": [
+      {"type": "title", "title": "猜数游戏", "subtitle": "映射教学 · 互动课"},
+      {"type": "interactive", "title": "情境", "question": "小明心里有个一位小数，告诉你它在 3 到 4 之间，你猜可能是几？", "hint": "可能不止一个答案", "notes": "鼓励发散思维。"},
+      {"type": "interactive", "title": "继续猜", "question": "再告诉你：这个数加 1.5 后超过 5。还可能是哪些？", "hint": "用刚学的小数加法验证"},
+      {"type": "example", "title": "验证", "question": "假设小明的数是 3.7，3.7 + 1.5 = ?", "solution_steps": ["小数点对齐", "7+5=12 进 1", "3+1+1=5"], "answer": "5.2，符合", "animation": "step_by_step"},
+      {"type": "interactive", "title": "反向问", "question": "如果再加一个条件：减去 0.6 等于整数。最终是几？", "hint": "整数 = 小数部分为 0", "notes": "答案 3.6（3.6 - 0.6 = 3）。"},
+      {"type": "practice", "title": "课堂练习", "question": "你设计一道类似的猜数题，给同桌猜。", "notes": "小组互动 5 分钟。"},
+      {"type": "summary", "title": "本节总结", "bullets": ["小数加减帮助我们验证猜想", "条件越多答案越少", "数学是逻辑推理"], "animation": "reveal_on_click"}
+    ]
+  }
+}
