@@ -69,9 +69,19 @@ def _pipeline(run_id: str, body: GenerateBody) -> None:
             extra_instructions=body.extra_instructions,
             class_level=body.class_level,
         )
-        deck, in_tok, out_tok = generate_deck(req)
-        runs_service.update(run_id, input_tokens=in_tok, output_tokens=out_tok,
-                            cost_usd=estimate_cost(in_tok, out_tok))
+        deck, usage = generate_deck(req)
+        runs_service.update(
+            run_id,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cache_read_tokens=usage.cache_read_tokens,
+            cache_write_tokens=usage.cache_write_tokens,
+            cost_usd=estimate_cost(
+                usage.input_tokens, usage.output_tokens,
+                usage.cache_read_tokens, usage.cache_write_tokens,
+                model_id=settings.model,
+            ),
+        )
     except GenerationError as e:
         runs_service.update(run_id, stage="error", message=f"生成失败：{e}",
                             error=str(e), stop_reason=e.stop_reason or "")

@@ -157,7 +157,7 @@ def generate_clarification(run_id: str, background_tasks: BackgroundTasks) -> di
         unit_name=status.unit_name,
         lesson_name=f"{status.lesson_name} · 难点澄清",
         theme=status.theme,
-        batch_id=f"clarify_of_{run_id}",
+        parent_run_id=run_id,
     )
     body = GenerateBody(
         deck_type="lesson_plan",
@@ -207,17 +207,24 @@ def regenerate_slide(run_id: str, slide_idx: int, body: SlideRegenBody) -> dict:
     )
 
     try:
-        new_slide, in_tok, out_tok = regenerate_single_slide(req, deck, slide_idx)
+        new_slide, usage = regenerate_single_slide(req, deck, slide_idx)
     except GenerationError as e:
         raise HTTPException(status_code=502, detail={"error": str(e), "stop_reason": e.stop_reason})
 
-    # 把单页重生成的 token 用量加到 run status
+    # 累加 token 用量
     from app.services.pricing import estimate_cost
+    new_in = status.input_tokens + usage.input_tokens
+    new_out = status.output_tokens + usage.output_tokens
+    new_cache_r = status.cache_read_tokens + usage.cache_read_tokens
+    new_cache_w = status.cache_write_tokens + usage.cache_write_tokens
     runs_service.update(
         run_id,
-        input_tokens=status.input_tokens + in_tok,
-        output_tokens=status.output_tokens + out_tok,
-        cost_usd=estimate_cost(status.input_tokens + in_tok, status.output_tokens + out_tok),
+        input_tokens=new_in,
+        output_tokens=new_out,
+        cache_read_tokens=new_cache_r,
+        cache_write_tokens=new_cache_w,
+        cost_usd=estimate_cost(new_in, new_out, new_cache_r, new_cache_w,
+                               model_id=settings.model),
     )
 
     # 替换并落盘

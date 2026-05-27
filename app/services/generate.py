@@ -99,12 +99,27 @@ def _build_user_message(req: GenerationRequest) -> str:
         "## 课时正文（来自老师上传的教材）",
         req.lesson_content.strip() or "（老师尚未上传该课时教材，请基于课程标准和你自身知识生成）",
     ]
-    if req.standard_excerpt.strip():
-        parts += ["", "## 对应课程标准条目", req.standard_excerpt.strip()]
     if req.extra_instructions.strip():
         parts += ["", "## 老师备注", req.extra_instructions.strip()]
     parts += ["", "请调用 emit_deck 工具输出 PPT 结构。"]
     return "\n".join(parts)
+
+
+def _system_blocks(deck_type: str, standard_excerpt: str = "") -> list[dict]:
+    """构造 system 参数（list of blocks），最后一块带 cache_control 以启用 prompt 缓存。
+
+    system_prompt + standard_excerpt 在批量生成同单元时反复出现，缓存命中能省 ~70% 输入 token。
+    """
+    system_prompt = _load_prompt(deck_type)
+    blocks: list[dict] = [{"type": "text", "text": system_prompt}]
+    if standard_excerpt.strip():
+        blocks.append({
+            "type": "text",
+            "text": "\n\n## 课程标准节选\n\n" + standard_excerpt.strip(),
+        })
+    # 最后一块标 cache_control = ephemeral；之前的块默认随之缓存
+    blocks[-1]["cache_control"] = {"type": "ephemeral"}
+    return blocks
 
 
 def _tools(extra: list[dict] | None = None) -> list[dict]:
@@ -129,16 +144,41 @@ def _extract_tool_input(msg: Message, tool_name: str) -> dict:
     )
 
 
-def generate_deck(req: GenerationRequest) -> tuple[Deck, int, int]:
-    """同步调用 Sonnet，返回 (Deck, input_tokens, output_tokens)。Mock 模式 tokens 为 0。"""
+@dataclass
+class Usage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    def __iadd__(self, other: "Usage") -> "Usage":
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.cache_read_tokens += other.cache_read_tokens
+        self.cache_write_tokens += other.cache_write_tokens
+        return self
+
+
+def _usage_from(msg: Message) -> Usage:
+    u = msg.usage
+    return Usage(
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        cache_read_tokens=getattr(u, "cache_read_input_tokens", 0) or 0,
+        cache_write_tokens=getattr(u, "cache_creation_input_tokens", 0) or 0,
+    )
+
+
+def generate_deck(req: GenerationRequest) -> tuple[Deck, Usage]:
+    """同步调用 Sonnet，返回 (Deck, Usage)。Mock 模式 usage 全 0。"""
     if settings.mock:
-        return _generate_mock(req), 0, 0
+        return _generate_mock(req), Usage()
 
     if not settings.anthropic_api_key:
         raise GenerationError("未配置 ANTHROPIC_API_KEY，请在 .env 中填写；或设 AIPPT_MOCK=1 走示例")
 
     client = Anthropic(api_key=settings.anthropic_api_key)
-    system = _load_prompt(req.deck_type)
+    system = _system_blocks(req.deck_type, req.standard_excerpt)
     user = _build_user_message(req)
 
     tool_choice = (
@@ -156,17 +196,15 @@ def generate_deck(req: GenerationRequest) -> tuple[Deck, int, int]:
         messages=[{"role": "user", "content": user}],
     )
 
-    in_tokens = msg.usage.input_tokens
-    out_tokens = msg.usage.output_tokens
+    usage = _usage_from(msg)
 
     if msg.stop_reason == "tool_use" and not _has_tool(msg, "emit_deck"):
         msg = _continue_until(client, system, user, msg, "emit_deck",
                               tools=_tools([DECK_TOOL_SCHEMA]))
-        in_tokens += msg.usage.input_tokens
-        out_tokens += msg.usage.output_tokens
+        usage += _usage_from(msg)
 
     deck = Deck.model_validate(_extract_tool_input(msg, "emit_deck"))
-    return deck, in_tokens, out_tokens
+    return deck, usage
 
 
 def _has_tool(msg: Message, name: str) -> bool:
@@ -222,10 +260,10 @@ def _mock_regenerate_slide(req: GenerationRequest, deck: Deck, idx: int) -> Slid
     return s
 
 
-def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> tuple[Slide, int, int]:
-    """重新生成 deck 第 idx 页。返回 (Slide, input_tokens, output_tokens)。"""
+def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> tuple[Slide, Usage]:
+    """重新生成 deck 第 idx 页。返回 (Slide, Usage)。"""
     if settings.mock:
-        return _mock_regenerate_slide(req, deck, idx), 0, 0
+        return _mock_regenerate_slide(req, deck, idx), Usage()
 
     if not settings.anthropic_api_key:
         raise GenerationError("未配置 ANTHROPIC_API_KEY")
@@ -261,7 +299,7 @@ def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> tup
     )
 
     slide = Slide.model_validate(_extract_tool_input(msg, "emit_slide"))
-    return slide, msg.usage.input_tokens, msg.usage.output_tokens
+    return slide, _usage_from(msg)
 
 
 def save_deck_json(deck: Deck, run_dir: Path) -> Path:

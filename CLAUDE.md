@@ -135,6 +135,26 @@ Anthropic SDK 的 `client.messages.create(...).usage` 已经返回精确的 `inp
 
 `diagrams.py` 渲染中文优先用 `fonts/` 目录（用 `scripts/fetch_fonts.py` 下载 Noto Sans SC），其次系统字体（雅黑 / 苹方 / Noto / 文泉驿），最后兜底 DejaVu（无中文 → 方框）。CI 走 `apt-get install fonts-noto-cjk`。
 
+### Prompt caching（M9）
+
+system prompt + 课程标准节选会反复出现（batch 生成同单元 N 节课时一模一样）。`services/generate.py:_system_blocks()` 把它们作为 list-of-blocks 传，最后一块带 `cache_control: ephemeral`，命中 Anthropic prompt 缓存。
+
+成本侧：`cache_creation_input_tokens` 按 1.25× input 单价，`cache_read_input_tokens` 按 0.10×。批量生成同单元 5 节课，理论上从第 2 节开始 ~70% 输入是缓存读。`RunStatus.cache_read_tokens` / `cache_write_tokens` 记录之，`pricing.estimate_cost()` 加权累计。
+
+注意：mock 模式所有 cache token 为 0，测不到真行为，要等真 API 跑过 batch 验证缓存命中。
+
+### parent_run_id：派生 run 的统一字段
+
+澄清 PPT、单页重生成等"从已有 run 派生新 run"的场景统一用 `RunStatus.parent_run_id`。**不要再用 batch_id 兜底**（batch_id 专表"一次批量任务"的成员）。新加派生关系的功能也走 parent_run_id。
+
+### 价格按 model_id 查表
+
+`services/pricing.py:_PRICING` dict 按 model_id 索引 (input, output) 单价。新模型加一行；环境变量 `AIPPT_INPUT/OUTPUT_USD_PER_MTOK` 覆盖。`estimate_cost(..., model_id=settings.model)` 总是显式传 model，不依赖默认值。
+
+### 每页 duration_minutes（M9）
+
+`Slide.duration_minutes` 让 Sonnet 估算讲解时长，prompt 里给了每类页的参考值。整 deck 总和≈ 35~40 分钟（一节小学课）。render 时把 `⏱ ~X 分钟` 加到 PPT 备注栏顶部，preview 页显示总时长 + 单页时长 chip。
+
 ### 联网搜索靠 Sonnet 的 web search 工具
 
 不要自己写爬虫调搜索引擎。在 `app/services/generate.py` 里把 web_search 工具加进 tools 数组，让模型自主决定是否搜。搜什么、怎么用都由 prompt 控制。

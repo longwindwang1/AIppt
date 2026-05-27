@@ -16,6 +16,7 @@
 </style>
 
 <div class="preview-root">
+  {% set total_min = deck.slides | sum(attribute='duration_minutes') %}
   <div class="preview-header">
     <div>
       <h2 style="margin:0">{{ deck.title }}</h2>
@@ -23,6 +24,7 @@
         {{ deck.grade }} 年级 · {{ '上' if deck.term == 1 else '下' }}册 ·
         {{ deck.unit_name }} · {{ deck.lesson_name }} ·
         主题 {{ theme.label }} · {{ deck.slides | length }} 页
+        {% if total_min > 0 %} · 预计讲 <strong>{{ '%.0f' | format(total_min) }}</strong> 分钟{% endif %}
       </div>
     </div>
     <div>
@@ -91,6 +93,9 @@
         </div>
       {% endif %}
       <div class="slide-num">{{ idx + 1 }} / {{ slides | length }}</div>
+      {% if slide.duration_minutes > 0 %}
+        <div class="slide-time">⏱ {{ '%.1f' | format(slide.duration_minutes) }} 分钟</div>
+      {% endif %}
     </div>
 
     <div class="slide-side">
@@ -222,6 +227,8 @@ document.querySelectorAll('.regen-btn').forEach(btn => {
 }
 .slide-mini.dark { color: var(--slide-text); }
 .slide-num { position: absolute; bottom: 6px; right: 10px; color: var(--slide-muted); font-size: 11px; }
+.slide-time { position: absolute; top: 8px; right: 12px; background: rgba(0,0,0,0.04); color: var(--slide-text); padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+.slide-mini.dark .slide-time { background: rgba(255,255,255,0.08); }
 
 .slide-title-bar {
   background: var(--slide-title); color: var(--slide-title-fg);

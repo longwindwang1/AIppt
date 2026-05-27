@@ -48,6 +48,9 @@ class Slide(BaseModel):
     # 类型见 app/services/diagrams.py render_diagram()
     diagram: dict | None = None
 
+    # M9：本页预计讲课时长（分钟）。整 deck 总和应≈一节课 35~40 分钟
+    duration_minutes: float = 0.0
+
 
 class Deck(BaseModel):
     title: str
@@ -109,6 +112,12 @@ _SLIDE_OBJ_SCHEMA = {
         "answer": {"type": "string"},
         "hint": {"type": "string"},
         "diagram": _DIAGRAM_SCHEMA,
+        "duration_minutes": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 15,
+            "description": "本页预计讲课分钟数。整 deck 总和应≈ 35~40 分钟（一节课）。封面 0.5 分钟，章节页 0.5 分钟，正常 content 1~2 分钟，example 3~5 分钟，practice 2~3 分钟。",
+        },
     },
     "required": ["type"],
 }

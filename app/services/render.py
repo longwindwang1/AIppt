@@ -216,8 +216,10 @@ def _add_slide(prs: Presentation, slide: Slide, theme: Theme) -> None:
     if has_diagram:
         _add_diagram(s, slide.diagram)
 
-    if slide.notes:
-        s.notes_slide.notes_text_frame.text = slide.notes
+    # 把时长信息写进 notes 顶部，方便老师讲课时瞄一眼
+    if slide.notes or slide.duration_minutes:
+        prefix = f"⏱ ~{slide.duration_minutes:.1f} 分钟\n\n" if slide.duration_minutes > 0 else ""
+        s.notes_slide.notes_text_frame.text = prefix + (slide.notes or "")
 
 
 def _draw_title_slide(s, slide: Slide, theme: Theme) -> None:

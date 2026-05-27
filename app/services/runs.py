@@ -50,7 +50,12 @@ class RunStatus(BaseModel):
     # 成本（mock 模式为 0）
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0           # M9: prompt caching 命中
+    cache_write_tokens: int = 0          # M9: 写入缓存（第一次跑某 system prompt）
     cost_usd: float = 0.0
+
+    # M9: 重构 — 来源 run（澄清 PPT / 单页重生成都可用）
+    parent_run_id: str = ""
 
     # 失败信息
     error: str = ""

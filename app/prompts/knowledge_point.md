@@ -34,3 +34,7 @@
 - 易错点要具体（如"忘记进位"、"小数点错位"），不要泛泛说"要仔细"
 - notes 写明每页该如何讲解、提问什么、预期学生回答
 - 总页数 10~16 页（不含动画展开）
+
+## 每页 duration_minutes
+
+复习课时长约 35 分钟。每页配 `duration_minutes`：封面 0.5 / section 0.5 / content 1.5~3 / example 3~5 / practice 2~3 / summary 2。

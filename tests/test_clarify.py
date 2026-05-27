@@ -87,8 +87,8 @@ def test_clarify_spawns_new_run(app_client):
     assert s["stage"] == "done"
     # 新 run 应该有 "难点澄清" 字样
     assert "难点澄清" in s["lesson_name"]
-    # 应链接回原 run
-    assert s["batch_id"] == f"clarify_of_{run_id}"
+    # 应链接回原 run（parent_run_id 取代了之前的 batch_id="clarify_of_" hack）
+    assert s["parent_run_id"] == run_id
 
 
 def test_cost_zero_in_mock_mode(app_client):
