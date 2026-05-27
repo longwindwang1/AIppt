@@ -19,6 +19,7 @@ from app.config import settings
 from app.services import kb as kb_service
 from app.services import runs as runs_service
 from app.services.generate import GenerationError, GenerationRequest, generate_deck, save_deck_json
+from app.services.pricing import estimate_cost
 from app.services.render import THEMES, render
 
 router = APIRouter(tags=["generate"])
@@ -68,7 +69,9 @@ def _pipeline(run_id: str, body: GenerateBody) -> None:
             extra_instructions=body.extra_instructions,
             class_level=body.class_level,
         )
-        deck = generate_deck(req)
+        deck, in_tok, out_tok = generate_deck(req)
+        runs_service.update(run_id, input_tokens=in_tok, output_tokens=out_tok,
+                            cost_usd=estimate_cost(in_tok, out_tok))
     except GenerationError as e:
         runs_service.update(run_id, stage="error", message=f"生成失败：{e}",
                             error=str(e), stop_reason=e.stop_reason or "")

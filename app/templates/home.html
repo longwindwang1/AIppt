@@ -6,7 +6,8 @@
   <div class="kpis">
     <div class="kpi"><strong>{{ lesson_count }}</strong><span>已入库课时</span></div>
     <div class="kpi"><strong>{{ runs_count }}</strong><span>已生成 PPT</span></div>
-    <div class="kpi"><strong>4</strong><span>种 PPT 类型</span></div>
+    <div class="kpi"><strong>${{ '%.2f' | format(total_cost_usd) }}</strong>
+      <span title="input {{ total_input_tokens }} · output {{ total_output_tokens }}">累计成本 (USD)</span></div>
     <div class="kpi"><strong>{{ model }}</strong><span>生成引擎</span></div>
   </div>
   <div class="cta">

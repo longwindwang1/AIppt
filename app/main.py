@@ -53,10 +53,15 @@ def _count_runs() -> int:
 
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request) -> HTMLResponse:
+    from app.services import runs as runs_service
+    in_tok, out_tok = runs_service.total_tokens()
     return templates.TemplateResponse(request, "home.html", {
         "model": settings.model,
         "lesson_count": _count_lessons(),
         "runs_count": _count_runs(),
+        "total_cost_usd": runs_service.total_cost_usd(),
+        "total_input_tokens": in_tok,
+        "total_output_tokens": out_tok,
     })
 
 

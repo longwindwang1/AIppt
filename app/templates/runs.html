@@ -8,7 +8,7 @@
     <p>还没有生成过 PPT。<a href="/generate">去生成一个</a>。</p>
   </div>
 {% else %}
-  <p class="muted small">共 {{ runs | length }} 个 run。点缩略卡可预览 / 下载。</p>
+  <p class="muted small">共 {{ runs | length }} 个 run · 累计 ${{ '%.4f' | format(runs | sum(attribute='cost_usd')) }} · 点缩略卡可预览 / 下载。</p>
 
   <div class="runs-grid">
     {% for r in runs %}
@@ -27,7 +27,10 @@
           </div>
         </a>
         <div class="run-meta">
-          <div class="muted small">{{ r.created_at[5:16] | replace('T', ' ') }} · {{ r.elapsed_sec }}s</div>
+          <div class="muted small">
+            {{ r.created_at[5:16] | replace('T', ' ') }} · {{ r.elapsed_sec }}s
+            {% if r.cost_usd > 0 %} · ${{ '%.4f' | format(r.cost_usd) }}{% endif %}
+          </div>
           <div class="run-actions">
             {% if r.stage == 'done' %}
               <a href="/download/{{ r.run_id }}/{{ r.pptx_filename }}" download class="btn small">下载</a>

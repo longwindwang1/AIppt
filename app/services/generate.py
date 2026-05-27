@@ -129,10 +129,10 @@ def _extract_tool_input(msg: Message, tool_name: str) -> dict:
     )
 
 
-def generate_deck(req: GenerationRequest) -> Deck:
-    """同步调用 Sonnet，返回解析后的 Deck。Mock 模式跳过 Sonnet。"""
+def generate_deck(req: GenerationRequest) -> tuple[Deck, int, int]:
+    """同步调用 Sonnet，返回 (Deck, input_tokens, output_tokens)。Mock 模式 tokens 为 0。"""
     if settings.mock:
-        return _generate_mock(req)
+        return _generate_mock(req), 0, 0
 
     if not settings.anthropic_api_key:
         raise GenerationError("未配置 ANTHROPIC_API_KEY，请在 .env 中填写；或设 AIPPT_MOCK=1 走示例")
@@ -156,11 +156,17 @@ def generate_deck(req: GenerationRequest) -> Deck:
         messages=[{"role": "user", "content": user}],
     )
 
+    in_tokens = msg.usage.input_tokens
+    out_tokens = msg.usage.output_tokens
+
     if msg.stop_reason == "tool_use" and not _has_tool(msg, "emit_deck"):
         msg = _continue_until(client, system, user, msg, "emit_deck",
                               tools=_tools([DECK_TOOL_SCHEMA]))
+        in_tokens += msg.usage.input_tokens
+        out_tokens += msg.usage.output_tokens
 
-    return Deck.model_validate(_extract_tool_input(msg, "emit_deck"))
+    deck = Deck.model_validate(_extract_tool_input(msg, "emit_deck"))
+    return deck, in_tokens, out_tokens
 
 
 def _has_tool(msg: Message, name: str) -> bool:
@@ -216,10 +222,10 @@ def _mock_regenerate_slide(req: GenerationRequest, deck: Deck, idx: int) -> Slid
     return s
 
 
-def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> Slide:
-    """重新生成 deck 第 idx 页。返回新的 Slide。"""
+def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> tuple[Slide, int, int]:
+    """重新生成 deck 第 idx 页。返回 (Slide, input_tokens, output_tokens)。"""
     if settings.mock:
-        return _mock_regenerate_slide(req, deck, idx)
+        return _mock_regenerate_slide(req, deck, idx), 0, 0
 
     if not settings.anthropic_api_key:
         raise GenerationError("未配置 ANTHROPIC_API_KEY")
@@ -254,7 +260,8 @@ def regenerate_single_slide(req: GenerationRequest, deck: Deck, idx: int) -> Sli
         messages=[{"role": "user", "content": user}],
     )
 
-    return Slide.model_validate(_extract_tool_input(msg, "emit_slide"))
+    slide = Slide.model_validate(_extract_tool_input(msg, "emit_slide"))
+    return slide, msg.usage.input_tokens, msg.usage.output_tokens
 
 
 def save_deck_json(deck: Deck, run_dir: Path) -> Path:

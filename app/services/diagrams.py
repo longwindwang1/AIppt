@@ -31,9 +31,25 @@ SHADED = (255, 226, 192)     # 浅橙填充
 TEXT = (40, 40, 40)
 
 
+PROJECT_FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"
+
+
 def _cn_font(size: int) -> ImageFont.FreeTypeFont:
-    """中文字体 fallback：Windows → 微软雅黑；macOS → PingFang；其他 → DejaVu。"""
+    """中文字体多级 fallback。
+
+    优先级：
+    1. 项目自带 fonts/ 目录（用 scripts/fetch_fonts.py 下载）
+    2. 系统字体（Windows / macOS / Linux 常见路径）
+    3. Pillow 默认（DejaVu，无中文 → 方框）
+    """
     candidates: list[Path] = []
+
+    # 1. 项目自带（首选，跨平台一致）
+    if PROJECT_FONTS_DIR.exists():
+        for ext in ("*.ttf", "*.ttc", "*.otf"):
+            candidates += sorted(PROJECT_FONTS_DIR.glob(ext))
+
+    # 2. 系统字体
     sysname = platform.system().lower()
     if sysname == "windows":
         candidates += [
@@ -47,11 +63,16 @@ def _cn_font(size: int) -> ImageFont.FreeTypeFont:
             Path("/Library/Fonts/Songti.ttc"),
         ]
     else:
+        # Linux：Noto / 文泉驿 / DejaVu
         candidates += [
+            Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+            Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            Path("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc"),
             Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+            Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
         ]
+
     for p in candidates:
         if p.exists():
             try:

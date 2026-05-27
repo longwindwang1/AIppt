@@ -31,7 +31,13 @@
     </div>
   </div>
 
-  <p class="muted small">逐页过一遍。每页旁边是讲稿；不满意可点"重生成本页"调整。</p>
+  <div id="clarify-bar" class="clarify-bar {{ '' if difficult_set else 'hidden' }}">
+    <span>已标记 <strong id="dpt-count">{{ difficult_set | length }}</strong> 页为难点。</span>
+    <button class="btn primary small" id="clarify-btn">✨ 生成难点澄清 PPT</button>
+    <span class="muted small">（专门针对这几页重新讲，约 6~10 页，10~20 秒）</span>
+  </div>
+
+  <p class="muted small">逐页过一遍。每页旁边是讲稿；不满意可点"重生成本页"调整；学生没听懂的页点"难点"标记，再点上面的"生成澄清 PPT"。</p>
 
   {% for idx, slide in slides %}
   <div class="preview-row" data-idx="{{ idx }}">
@@ -88,7 +94,14 @@
     </div>
 
     <div class="slide-side">
-      <h4>讲稿 / Notes</h4>
+      <div class="slide-side-header">
+        <h4 style="margin:0">讲稿 / Notes</h4>
+        <label class="diff-toggle">
+          <input type="checkbox" class="diff-check"
+                 {% if idx in difficult_set %}checked{% endif %}>
+          <span>标为难点</span>
+        </label>
+      </div>
       <div class="notes">{{ slide.notes or '（无）' }}</div>
 
       {% if slide.animation and slide.animation != 'none' %}
@@ -108,6 +121,59 @@
 
 <script>
 const RUN_ID = "{{ run_id }}";
+let DIFFICULT_COUNT = {{ difficult_set | length }};
+
+// 难点标记切换
+document.querySelectorAll('.diff-check').forEach(chk => {
+  chk.addEventListener('change', async (e) => {
+    const idx = parseInt(e.target.closest('.preview-row').dataset.idx);
+    try {
+      const r = await fetch(`/runs/${RUN_ID}/difficult/${idx}`, { method: 'POST' });
+      const data = await r.json();
+      DIFFICULT_COUNT = data.all_difficult.length;
+      document.getElementById('dpt-count').textContent = DIFFICULT_COUNT;
+      document.getElementById('clarify-bar').classList.toggle('hidden', DIFFICULT_COUNT === 0);
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      alert('保存失败：' + err.message);
+    }
+  });
+});
+
+// 生成澄清 PPT
+document.getElementById('clarify-btn')?.addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  e.target.textContent = '提交中…';
+  try {
+    const r = await fetch(`/runs/${RUN_ID}/clarify`, { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) {
+      alert('失败：' + (data.detail || JSON.stringify(data)));
+      e.target.disabled = false;
+      e.target.textContent = '✨ 生成难点澄清 PPT';
+      return;
+    }
+    // 轮询到完成后跳转
+    alert(`澄清 PPT 已开始生成（run_id=${data.new_run_id}）。完成后会自动跳转到预览页。`);
+    const newRunId = data.new_run_id;
+    const poll = setInterval(async () => {
+      const s = await (await fetch(`/api/runs/${newRunId}/status`)).json();
+      if (s.stage === 'done') {
+        clearInterval(poll);
+        location.href = `/runs/${newRunId}/preview`;
+      } else if (s.stage === 'error') {
+        clearInterval(poll);
+        alert('澄清 PPT 生成失败：' + s.message);
+        e.target.disabled = false;
+        e.target.textContent = '✨ 生成难点澄清 PPT';
+      }
+    }, 2000);
+  } catch (err) {
+    alert('请求失败：' + err.message);
+    e.target.disabled = false;
+    e.target.textContent = '✨ 生成难点澄清 PPT';
+  }
+});
 
 document.querySelectorAll('.regen-btn').forEach(btn => {
   btn.addEventListener('click', async (e) => {
@@ -187,6 +253,14 @@ document.querySelectorAll('.regen-btn').forEach(btn => {
 
 .diagram-wrap { margin-top: 8px; text-align: center; }
 .diagram-wrap img { max-width: 100%; max-height: 110px; }
+
+.clarify-bar { background: #fff7ed; border: 1px solid #fed7aa; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+.clarify-bar.hidden { display: none; }
+.clarify-bar strong { color: var(--accent); font-size: 18px; }
+
+.slide-side-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.diff-toggle { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+.diff-toggle input { margin: 0; }
 
 @media (max-width: 980px) {
   .preview-row { grid-template-columns: 1fr; }

@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -34,6 +35,26 @@ def _deck_path(run_id: str) -> Path:
     return settings.runs_dir / run_id / "deck.json"
 
 
+def _difficult_path(run_id: str) -> Path:
+    return settings.runs_dir / run_id / "difficult.json"
+
+
+def _read_difficult(run_id: str) -> set[int]:
+    path = _difficult_path(run_id)
+    if not path.exists():
+        return set()
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8")).get("indices", []))
+    except Exception:
+        return set()
+
+
+def _write_difficult(run_id: str, indices: set[int]) -> None:
+    path = _difficult_path(run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"indices": sorted(indices)}), encoding="utf-8")
+
+
 def _load_deck(run_id: str) -> Deck:
     path = _deck_path(run_id)
     if not path.exists():
@@ -46,6 +67,7 @@ def preview(run_id: str, request: Request) -> HTMLResponse:
     deck = _load_deck(run_id)
     status = runs_service.read(run_id)
     theme_key = status.theme if status else "formal_blue"
+    difficult = _read_difficult(run_id)
     return templates.TemplateResponse(request, "preview.html", {
         "deck": deck,
         "slides": list(enumerate(deck.slides)),
@@ -53,7 +75,107 @@ def preview(run_id: str, request: Request) -> HTMLResponse:
         "theme": THEMES.get(theme_key, THEMES["formal_blue"]),
         "theme_key": theme_key,
         "pptx_url": f"/download/{run_id}/{deck.filename()}",
+        "difficult_set": difficult,
     })
+
+
+# --- 难点标记 -------------------------------------------------------------
+
+@router.post("/runs/{run_id}/difficult/{slide_idx}")
+def toggle_difficult(run_id: str, slide_idx: int) -> dict:
+    deck = _load_deck(run_id)
+    if slide_idx < 0 or slide_idx >= len(deck.slides):
+        raise HTTPException(status_code=400, detail="slide_idx 越界")
+    current = _read_difficult(run_id)
+    if slide_idx in current:
+        current.discard(slide_idx)
+        marked = False
+    else:
+        current.add(slide_idx)
+        marked = True
+    _write_difficult(run_id, current)
+    return {"slide_idx": slide_idx, "marked": marked, "all_difficult": sorted(current)}
+
+
+@router.get("/runs/{run_id}/difficult")
+def get_difficult(run_id: str) -> dict:
+    return {"indices": sorted(_read_difficult(run_id))}
+
+
+# --- 难点澄清 PPT --------------------------------------------------------
+
+@router.post("/runs/{run_id}/clarify")
+def generate_clarification(run_id: str, background_tasks: BackgroundTasks) -> dict:
+    """根据被标的难点页，spawn 一个新 run 生成澄清 PPT。"""
+    deck = _load_deck(run_id)
+    status = runs_service.read(run_id)
+    if not status:
+        raise HTTPException(status_code=404, detail="原 run 不存在")
+
+    difficult = sorted(_read_difficult(run_id))
+    if not difficult:
+        raise HTTPException(status_code=400, detail="尚未标记任何难点页")
+
+    # 把难点页的核心内容浓缩成 extra_instructions
+    lines = ["这是一节【难点澄清课】，针对学生在原 PPT 中表示没听懂的若干页重新讲解。",
+             f"原 PPT 题目：{deck.title}",
+             "",
+             "## 学生反馈的难点页内容："]
+    for idx in difficult:
+        s = deck.slides[idx]
+        lines.append(f"\n### 第 {idx + 1} 页（type={s.type}）")
+        if s.title:
+            lines.append(f"标题：{s.title}")
+        if s.question:
+            lines.append(f"题目：{s.question}")
+        if s.bullets:
+            lines.append("要点：" + "；".join(s.bullets))
+        if s.solution_steps:
+            lines.append("解答步骤：" + " → ".join(s.solution_steps))
+        if s.notes:
+            lines.append(f"原讲稿：{s.notes[:200]}")
+
+    lines += [
+        "",
+        "## 重生成要求",
+        "- 总页数 6~10 页（不是完整一节课，是聚焦澄清）",
+        "- 用更直观的方式（多用 diagram 字段、举更生活化例子）重新讲解上面的难点",
+        "- 假设学生已经听过原 PPT 但没理解，所以**不要重复原讲法**，换思路",
+        "- 每个难点至少 1~2 页对应",
+        "- 末尾留 1 页「小测一下」练习",
+    ]
+    extra_instructions = "\n".join(lines)
+
+    # 用原 run 的元数据 + 这段超长指令，spawn 新生成
+    from app.routers.generate import GenerateBody, _pipeline
+
+    new_run_id = uuid.uuid4().hex[:12]
+    runs_service.init(
+        new_run_id,
+        deck_type="lesson_plan",
+        grade=status.grade, term=status.term,
+        unit_name=status.unit_name,
+        lesson_name=f"{status.lesson_name} · 难点澄清",
+        theme=status.theme,
+        batch_id=f"clarify_of_{run_id}",
+    )
+    body = GenerateBody(
+        deck_type="lesson_plan",
+        grade=status.grade, term=status.term,
+        unit_name=status.unit_name,
+        lesson_name=f"{status.lesson_name} · 难点澄清",
+        theme=status.theme,
+        extra_instructions=extra_instructions,
+        class_level="basic",   # 澄清课默认按基础班难度走
+    )
+    background_tasks.add_task(_pipeline, new_run_id, body)
+    return {
+        "new_run_id": new_run_id,
+        "based_on": run_id,
+        "difficult_pages": difficult,
+        "status_url": f"/api/runs/{new_run_id}/status",
+        "preview_url_after_done": f"/runs/{new_run_id}/preview",
+    }
 
 
 # --- 单页重生成 -----------------------------------------------------------
@@ -85,9 +207,18 @@ def regenerate_slide(run_id: str, slide_idx: int, body: SlideRegenBody) -> dict:
     )
 
     try:
-        new_slide = regenerate_single_slide(req, deck, slide_idx)
+        new_slide, in_tok, out_tok = regenerate_single_slide(req, deck, slide_idx)
     except GenerationError as e:
         raise HTTPException(status_code=502, detail={"error": str(e), "stop_reason": e.stop_reason})
+
+    # 把单页重生成的 token 用量加到 run status
+    from app.services.pricing import estimate_cost
+    runs_service.update(
+        run_id,
+        input_tokens=status.input_tokens + in_tok,
+        output_tokens=status.output_tokens + out_tok,
+        cost_usd=estimate_cost(status.input_tokens + in_tok, status.output_tokens + out_tok),
+    )
 
     # 替换并落盘
     deck.slides[slide_idx] = new_slide

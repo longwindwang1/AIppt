@@ -47,6 +47,11 @@ class RunStatus(BaseModel):
     slide_count: int = 0
     pptx_filename: str = ""
 
+    # 成本（mock 模式为 0）
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
     # 失败信息
     error: str = ""
     stop_reason: str = ""
@@ -141,3 +146,13 @@ def count() -> int:
 
 def find_batch(batch_id: str) -> list[RunStatus]:
     return [s for s in list_all() if s.batch_id == batch_id]
+
+
+def total_cost_usd() -> float:
+    return round(sum(s.cost_usd for s in list_all()), 4)
+
+
+def total_tokens() -> tuple[int, int]:
+    """返回累计 (input, output) token。"""
+    items = list_all()
+    return sum(s.input_tokens for s in items), sum(s.output_tokens for s in items)
