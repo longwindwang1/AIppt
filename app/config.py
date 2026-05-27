@@ -3,9 +3,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# 显式把 .env 读到 os.environ，让 ANTHROPIC_API_KEY（无 AIPPT_ 前缀的标准 Anthropic env）也能识别
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 class Settings(BaseSettings):

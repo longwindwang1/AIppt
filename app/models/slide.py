@@ -7,9 +7,10 @@
 """
 from __future__ import annotations
 
+import json
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AnimationHint(str, Enum):
@@ -60,6 +61,17 @@ class Deck(BaseModel):
     lesson_name: str
     deck_type: str  # lesson_plan / knowledge_point / practice / interactive
     slides: list[Slide]
+
+    @field_validator("slides", mode="before")
+    @classmethod
+    def _coerce_slides(cls, v):
+        """Sonnet 偶尔把 slides 用 JSON 字符串返回（tool use 嵌套复杂时）。容错解码。"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"slides 是字符串但不是合法 JSON: {e}") from e
+        return v
 
     def filename(self) -> str:
         safe = self.title.replace("/", "_").replace("\\", "_")

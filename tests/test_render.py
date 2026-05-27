@@ -60,6 +60,29 @@ def test_animation_expansion(deck: Deck, tmp_path: Path) -> None:
     assert len(prs.slides) == expected
 
 
+def test_deck_coerces_string_slides() -> None:
+    """Sonnet 偶尔把 slides 当 JSON 字符串返回——容错验证器应能解析。"""
+    raw = {
+        "title": "T", "grade": 4, "term": 2,
+        "unit_name": "U", "lesson_name": "L", "deck_type": "lesson_plan",
+        "slides": '[{"type": "title", "title": "封面"}, {"type": "summary", "title": "结束"}]',
+    }
+    d = Deck.model_validate(raw)
+    assert len(d.slides) == 2
+    assert d.slides[0].title == "封面"
+
+
+def test_deck_rejects_invalid_string_slides() -> None:
+    import pytest
+    raw = {
+        "title": "T", "grade": 4, "term": 2,
+        "unit_name": "U", "lesson_name": "L", "deck_type": "lesson_plan",
+        "slides": '[{"type": "title", broken json',
+    }
+    with pytest.raises(Exception):
+        Deck.model_validate(raw)
+
+
 def test_notes_persisted(deck: Deck, tmp_path: Path) -> None:
     """有 notes 的 slide 应把讲稿写到 PPT 备注栏。"""
     out = render(deck, out_path=tmp_path / "notes.pptx")

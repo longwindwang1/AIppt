@@ -101,7 +101,16 @@ def _build_user_message(req: GenerationRequest) -> str:
     ]
     if req.extra_instructions.strip():
         parts += ["", "## 老师备注", req.extra_instructions.strip()]
-    parts += ["", "请调用 emit_deck 工具输出 PPT 结构。"]
+    parts += [
+        "",
+        "请调用 emit_deck 工具输出 PPT 结构。",
+        "",
+        "**重要 (避免 JSON 解析失败)**：",
+        "1. slides 字段必须是**原生 JSON 数组**，不要把它作为 JSON 字符串嵌入",
+        "2. 所有文本字段（title / notes / bullets 等）中不要使用半角引号 \" 包裹词语",
+        "   - 错误示例：notes 中写 \"用'买菜'引入\"，应改为：用「买菜」引入",
+        "3. 引用学生口语时用中文引号「」或单引号 '，不要用 \"",
+    ]
     return "\n".join(parts)
 
 
@@ -136,6 +145,14 @@ def _tools(extra: list[dict] | None = None) -> list[dict]:
 def _extract_tool_input(msg: Message, tool_name: str) -> dict:
     for block in msg.content:
         if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
+            # debug：把原始 input 写到 /tmp 方便排查复杂结构异常
+            try:
+                import os, tempfile
+                if os.getenv("AIPPT_DEBUG_DUMP"):
+                    dump = Path(tempfile.gettempdir()) / "aippt_last_tool_input.json"
+                    dump.write_text(json.dumps(block.input, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
             return block.input
     raise GenerationError(
         f"Sonnet 未调用 {tool_name} 工具。stop_reason={msg.stop_reason}",
@@ -203,8 +220,58 @@ def generate_deck(req: GenerationRequest) -> tuple[Deck, Usage]:
                               tools=_tools([DECK_TOOL_SCHEMA]))
         usage += _usage_from(msg)
 
-    deck = Deck.model_validate(_extract_tool_input(msg, "emit_deck"))
+    deck, retry_usage = _validate_or_retry(client, system, user, msg, max_retries=1)
+    usage += retry_usage
     return deck, usage
+
+
+def _validate_or_retry(client: Anthropic, system: list[dict] | str, user: str,
+                        msg: Message, max_retries: int = 1) -> tuple[Deck, Usage]:
+    """尝试解析 emit_deck.input；失败则重新提示 Sonnet 修复。"""
+    from pydantic import ValidationError
+
+    history: list[dict] = [
+        {"role": "user", "content": user},
+        {"role": "assistant", "content": msg.content},
+    ]
+    extra_usage = Usage()
+
+    for attempt in range(max_retries + 1):
+        try:
+            return Deck.model_validate(_extract_tool_input(msg, "emit_deck")), extra_usage
+        except (ValidationError, ValueError) as e:
+            if attempt >= max_retries:
+                raise GenerationError(
+                    f"Sonnet 输出无法解析为 Deck，已重试 {attempt} 次：{e}",
+                    stop_reason=msg.stop_reason, raw=msg,
+                )
+            # 重新提示
+            history.append({
+                "role": "user",
+                "content": (
+                    "你上次输出的 emit_deck.slides 不是合法 JSON 数组——很可能"
+                    "把 slides 作为 JSON 字符串返回了，或者 notes/title 中嵌了"
+                    "未转义的半角双引号。\n\n"
+                    "**请重新调用 emit_deck**：\n"
+                    "1. slides 一定是原生 array，不是字符串\n"
+                    "2. 所有字符串值里不要用半角引号 \" 包裹任何词，用「」或单引号 '\n"
+                    "3. 例如：错的 \"notes\": \"先用\\\"买菜\\\"引入\"，对的 "
+                    "\"notes\": \"先用「买菜」引入\""
+                ),
+            })
+            msg = client.messages.create(
+                model=settings.model,
+                max_tokens=settings.max_tokens,
+                system=system,
+                tools=_tools([DECK_TOOL_SCHEMA]),
+                tool_choice={"type": "tool", "name": "emit_deck"},
+                messages=history,
+            )
+            extra_usage += _usage_from(msg)
+            history.append({"role": "assistant", "content": msg.content})
+
+    # 不会到这里（max_retries 后会 raise）
+    raise GenerationError("validation loop logic error")
 
 
 def _has_tool(msg: Message, name: str) -> bool:
