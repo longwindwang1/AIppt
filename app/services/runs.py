@@ -40,6 +40,7 @@ class RunStatus(BaseModel):
     unit_name: str = ""
     lesson_name: str = ""
     theme: str = "formal_blue"
+    batch_id: str = ""                     # 属于哪个 batch（单生成则为空）
 
     # 成功结果
     deck_title: str = ""
@@ -136,3 +137,7 @@ def delete(run_id: str) -> bool:
 
 def count() -> int:
     return len(list_all())
+
+
+def find_batch(batch_id: str) -> list[RunStatus]:
+    return [s for s in list_all() if s.batch_id == batch_id]

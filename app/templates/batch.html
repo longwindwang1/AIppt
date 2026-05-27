@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}批量生成 · aippt{% endblock %}
+{% block content %}
+<h2>批量生成（按单元）</h2>
+<p class="muted small">一次性给某个单元的所有课时生成同一类型的 PPT。完成后下载 .zip 包含全部文件。</p>
+
+{% if not tree %}
+  <div class="empty">
+    <p>知识库为空。<a href="/upload">先上传教材</a>。</p>
+  </div>
+{% else %}
+  <form id="batch-form" class="form">
+    <div class="row">
+      <label>年级
+        <select name="grade" required id="grade-sel">
+          {% for grade_key in tree.keys() %}
+            <option value="{{ grade_key | replace('grade_', '') }}">{{ grade_key | replace('grade_', '') }} 年级</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>学期
+        <select name="term" required id="term-sel">
+          <option value="1">上册</option>
+          <option value="2">下册</option>
+        </select>
+      </label>
+    </div>
+
+    <label>单元 <select name="unit_name" id="unit-sel" required></select></label>
+    <div id="lesson-preview" class="muted small"></div>
+
+    <div class="row">
+      <label>PPT 类型
+        <select name="deck_type" required>
+          <option value="lesson_plan">课时教案</option>
+          <option value="knowledge_point">知识点专项</option>
+          <option value="practice">练习题集</option>
+          <option value="interactive">映射教学</option>
+        </select>
+      </label>
+      <label>视觉主题
+        <select name="theme" required>
+          {% for key, t in themes.items() %}
+            <option value="{{ key }}">{{ t.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>学情
+        <select name="class_level">
+          <option value="normal">普通班</option>
+          <option value="advanced">拔尖班</option>
+          <option value="basic">基础班</option>
+        </select>
+      </label>
+    </div>
+
+    <button type="submit" class="btn primary" id="submit-btn">批量生成</button>
+  </form>
+
+  <div id="batch-status" class="status hidden">
+    <h3 id="batch-summary">提交中…</h3>
+    <div class="progress"><div id="batch-progress-bar" class="progress-bar"></div></div>
+    <table id="batch-table" class="runs-table"></table>
+    <div id="batch-actions" style="margin-top: 12px"></div>
+  </div>
+{% endif %}
+
+<script>
+const tree = {{ tree | tojson }};
+
+function refreshUnits() {
+  const grade = "grade_" + document.getElementById("grade-sel").value;
+  const term = "term_" + document.getElementById("term-sel").value;
+  const units = (tree[grade] && tree[grade][term]) || {};
+  const sel = document.getElementById("unit-sel");
+  sel.innerHTML = "";
+  Object.values(units).forEach(u => {
+    const opt = document.createElement("option");
+    opt.value = u.name;
+    opt.textContent = `${u.name}（${u.lessons.length} 节）`;
+    opt.dataset.lessons = JSON.stringify(u.lessons.map(l => l.name));
+    sel.appendChild(opt);
+  });
+  refreshLessonPreview();
+}
+
+function refreshLessonPreview() {
+  const opt = document.getElementById("unit-sel").selectedOptions[0];
+  if (!opt) { document.getElementById("lesson-preview").textContent = ""; return; }
+  const lessons = JSON.parse(opt.dataset.lessons || "[]");
+  document.getElementById("lesson-preview").textContent =
+    "将生成：" + lessons.join("、");
+}
+
+document.getElementById("grade-sel")?.addEventListener("change", refreshUnits);
+document.getElementById("term-sel")?.addEventListener("change", refreshUnits);
+document.getElementById("unit-sel")?.addEventListener("change", refreshLessonPreview);
+refreshUnits();
+
+let batchPollTimer = null;
+
+async function pollBatch(batchId) {
+  try {
+    const r = await fetch(`/api/batch/${batchId}/status`);
+    const data = await r.json();
+    document.getElementById("batch-summary").textContent =
+      `批次 ${batchId}：完成 ${data.done}/${data.total} · 失败 ${data.error}`;
+    document.getElementById("batch-progress-bar").style.width =
+      Math.round((data.done + data.error) / data.total * 100) + "%";
+
+    const rows = data.runs.map(r => `
+      <tr>
+        <td>${r.lesson_name}</td>
+        <td>${r.stage}</td>
+        <td>${r.message || ""}</td>
+        <td>${r.slide_count || "-"} 页</td>
+        <td>${r.elapsed_sec}s</td>
+        <td>${r.pptx_url ? `<a class="btn small" href="${r.pptx_url}" download>下载</a>` : ""}</td>
+      </tr>
+    `).join("");
+    document.getElementById("batch-table").innerHTML =
+      `<thead><tr><th>课时</th><th>状态</th><th>消息</th><th>页数</th><th>耗时</th><th>下载</th></tr></thead><tbody>${rows}</tbody>`;
+
+    if (data.done + data.error === data.total) {
+      clearInterval(batchPollTimer);
+      const action = document.getElementById("batch-actions");
+      if (data.done > 0) {
+        action.innerHTML = `<a class="btn primary" href="/api/batch/${batchId}/zip">⬇ 下载全部 .zip（${data.done} 个 PPT）</a>`;
+      }
+      document.getElementById("submit-btn").disabled = false;
+    }
+  } catch (err) { console.error(err); }
+}
+
+document.getElementById("batch-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = {
+    grade: parseInt(fd.get("grade")),
+    term: parseInt(fd.get("term")),
+    unit_name: fd.get("unit_name"),
+    deck_type: fd.get("deck_type"),
+    theme: fd.get("theme"),
+    class_level: fd.get("class_level"),
+  };
+  document.getElementById("submit-btn").disabled = true;
+  const st = document.getElementById("batch-status");
+  st.classList.remove("hidden");
+  document.getElementById("batch-summary").textContent = "提交中…";
+  document.getElementById("batch-progress-bar").style.width = "0%";
+  document.getElementById("batch-table").innerHTML = "";
+  document.getElementById("batch-actions").innerHTML = "";
+
+  try {
+    const r = await fetch("/generate/batch", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      document.getElementById("batch-summary").textContent =
+        "提交失败：" + (data.detail || JSON.stringify(data));
+      document.getElementById("submit-btn").disabled = false;
+      return;
+    }
+    const batchId = data.batch_id;
+    batchPollTimer = setInterval(() => pollBatch(batchId), 2000);
+    pollBatch(batchId);
+  } catch (err) {
+    document.getElementById("batch-summary").textContent = "请求失败：" + err.message;
+    document.getElementById("submit-btn").disabled = false;
+  }
+});
+</script>
+{% endblock %}

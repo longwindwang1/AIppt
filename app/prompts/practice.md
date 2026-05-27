@@ -21,6 +21,17 @@
 - **example 类型**：必须配 solution_steps（分步推导）和 answer
 - 数字算出来要对，不要凑数
 
+## 数学示意图
+
+练习题涉及几何 / 分数 / 数轴 / 面积时，可以在题目页加 `diagram` 字段帮助学生理解题意。4 种类型：
+
+- `number_line` — 数轴上找位置 / 比较大小
+- `area_model` — 面积、乘法、百分数概念可视化
+- `fraction_bar` — 分数题
+- `place_value_chart` — 小数 / 数位题
+
+如：`{"type": "fraction_bar", "parts": 6, "shaded": 4}` 配题"涂色部分是几分之几？"
+
 ## 难度梯度
 
 基础 < 变式 < 综合 < 挑战。同一层级内由易到难。

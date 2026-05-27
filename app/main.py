@@ -82,6 +82,15 @@ def generate_page(request: Request) -> HTMLResponse:
     })
 
 
+@app.get("/batch", response_class=HTMLResponse)
+def batch_page(request: Request) -> HTMLResponse:
+    from app.services import kb as kb_service
+    return templates.TemplateResponse(request, "batch.html", {
+        "tree": kb_service.tree(),
+        "themes": THEMES,
+    })
+
+
 @app.get("/runs", response_class=HTMLResponse)
 def runs_page(request: Request) -> HTMLResponse:
     from app.services import runs as runs_service

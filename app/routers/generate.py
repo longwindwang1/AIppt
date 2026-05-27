@@ -1,16 +1,18 @@
-"""生成 PPT 的 HTTP 入口（M5：异步化）。
+"""生成 PPT 的 HTTP 入口。
 
-流程：
-  POST /generate → 立即返 run_id；BackgroundTasks 跑生成流水线
-  GET  /api/runs/{run_id}/status → 轮询进度
-
-阶段：queued → thinking（调 Sonnet）→ rendering → done | error
+- POST /generate           — 单个 PPT（异步，返 run_id）
+- POST /generate/batch     — 整单元批量（一次出该单元全部课时）
+- GET  /api/runs/{id}/status
+- GET  /api/batch/{batch_id}/status / /zip
 """
 from __future__ import annotations
 
+import io
 import uuid
+import zipfile
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from app.config import settings
@@ -130,3 +132,103 @@ def delete_run(run_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="run 不存在")
     return {"deleted": run_id}
+
+
+# --- 单元批量生成 -----------------------------------------------------------
+
+
+class BatchBody(BaseModel):
+    deck_type: str = Field(pattern="^(lesson_plan|knowledge_point|practice|interactive)$")
+    grade: int = Field(ge=1, le=6)
+    term: int = Field(ge=1, le=2)
+    unit_name: str
+    theme: str = "formal_blue"
+    class_level: str = Field(default="normal", pattern="^(advanced|normal|basic)$")
+
+
+class BatchAck(BaseModel):
+    batch_id: str
+    run_ids: list[str]
+    status_url: str
+
+
+@router.post("/generate/batch", response_model=BatchAck)
+def generate_batch(body: BatchBody, background_tasks: BackgroundTasks) -> BatchAck:
+    if body.theme not in THEMES:
+        raise HTTPException(status_code=400, detail=f"未知主题：{body.theme}")
+
+    # 找该单元的所有课时
+    tree = kb_service.tree()
+    grade_node = tree.get(f"grade_{body.grade}", {})
+    term_node = grade_node.get(f"term_{body.term}", {})
+    lessons: list[dict] = []
+    for unit in term_node.values():
+        if unit.get("name") == body.unit_name:
+            lessons.extend(unit.get("lessons", []))
+
+    if not lessons:
+        raise HTTPException(status_code=404, detail=f"未找到单元《{body.unit_name}》的任何课时")
+
+    batch_id = "b" + uuid.uuid4().hex[:10]
+    run_ids: list[str] = []
+    for les in lessons:
+        run_id = uuid.uuid4().hex[:12]
+        runs_service.init(
+            run_id,
+            deck_type=body.deck_type, grade=body.grade, term=body.term,
+            unit_name=body.unit_name, lesson_name=les["name"],
+            theme=body.theme, batch_id=batch_id,
+        )
+        run_body = GenerateBody(
+            deck_type=body.deck_type, grade=body.grade, term=body.term,
+            unit_name=body.unit_name, lesson_name=les["name"],
+            lesson_id=les["id"], theme=body.theme, class_level=body.class_level,
+        )
+        background_tasks.add_task(_pipeline, run_id, run_body)
+        run_ids.append(run_id)
+
+    return BatchAck(batch_id=batch_id, run_ids=run_ids,
+                    status_url=f"/api/batch/{batch_id}/status")
+
+
+@router.get("/api/batch/{batch_id}/status")
+def batch_status(batch_id: str) -> dict:
+    items = runs_service.find_batch(batch_id)
+    if not items:
+        raise HTTPException(status_code=404, detail="batch 不存在")
+    done = sum(1 for s in items if s.stage == "done")
+    error = sum(1 for s in items if s.stage == "error")
+    return {
+        "batch_id": batch_id,
+        "total": len(items),
+        "done": done,
+        "error": error,
+        "in_progress": len(items) - done - error,
+        "runs": [
+            {**s.model_dump(), "pptx_url": s.pptx_url()} for s in items
+        ],
+    }
+
+
+@router.get("/api/batch/{batch_id}/zip")
+def batch_zip(batch_id: str) -> Response:
+    items = runs_service.find_batch(batch_id)
+    if not items:
+        raise HTTPException(status_code=404, detail="batch 不存在")
+    done_items = [s for s in items if s.stage == "done" and s.pptx_filename]
+    if not done_items:
+        raise HTTPException(status_code=409, detail="该批次尚无任何完成的 PPT")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for s in done_items:
+            path = settings.runs_dir / s.run_id / s.pptx_filename
+            if path.exists():
+                # zip 内文件名加序号避免重名
+                zf.write(path, arcname=f"{s.lesson_name}_{s.deck_type}.pptx")
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={batch_id}.zip"},
+    )

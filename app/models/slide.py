@@ -43,6 +43,11 @@ class Slide(BaseModel):
     answer: str = ""
     hint: str = ""
 
+    # M7：数学示意图（可选）
+    # 形如：{"type": "number_line", "start": 0, "end": 10, "marks": [3.5], "labels": ["A"]}
+    # 类型见 app/services/diagrams.py render_diagram()
+    diagram: dict | None = None
+
 
 class Deck(BaseModel):
     title: str
@@ -56,6 +61,32 @@ class Deck(BaseModel):
     def filename(self) -> str:
         safe = self.title.replace("/", "_").replace("\\", "_")
         return f"{safe}.pptx"
+
+
+_DIAGRAM_SCHEMA = {
+    "type": "object",
+    "description": "可选的数学示意图。会被渲染成 PNG 嵌入 PPT 和预览页。",
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["number_line", "area_model", "fraction_bar", "place_value_chart"],
+            "description": "图的类型",
+        },
+        "start": {"type": "number", "description": "number_line: 数轴起点"},
+        "end": {"type": "number", "description": "number_line: 数轴终点"},
+        "marks": {"type": "array", "items": {"type": "number"},
+                  "description": "number_line: 要标记的位置列表"},
+        "labels": {"type": "array", "items": {"type": "string"},
+                   "description": "number_line: 与 marks 同序的标签"},
+        "step": {"type": "number", "description": "number_line: 主刻度间隔（可选）"},
+        "rows": {"type": "integer", "description": "area_model: 行数"},
+        "cols": {"type": "integer", "description": "area_model: 列数"},
+        "parts": {"type": "integer", "description": "fraction_bar: 等分数"},
+        "shaded": {"type": "integer", "description": "area_model / fraction_bar: 着色格子数"},
+        "value": {"description": "place_value_chart: 数值（字符串或数字，如 '23.45'）"},
+    },
+    "required": ["type"],
+}
 
 
 _SLIDE_OBJ_SCHEMA = {
@@ -77,6 +108,7 @@ _SLIDE_OBJ_SCHEMA = {
         "solution_steps": {"type": "array", "items": {"type": "string"}},
         "answer": {"type": "string"},
         "hint": {"type": "string"},
+        "diagram": _DIAGRAM_SCHEMA,
     },
     "required": ["type"],
 }

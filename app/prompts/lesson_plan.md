@@ -30,6 +30,19 @@
 - 总 slides 数 8~14 页（不含动画展开）
 - 例题至少 2 个，练习题至少 2 个
 
+## 数学示意图（diagram）— 强烈建议用
+
+如果某页讲的是"数轴 / 分数 / 整百整千 / 面积 / 数位"等几何或位值概念，**在该 slide 加 `diagram` 字段**让系统画图。比纯文字直观得多。
+
+支持 4 种 type：
+
+- `number_line` — 数轴。例：`{"type": "number_line", "start": 0, "end": 10, "marks": [3.5, 7.2], "labels": ["A", "B"]}`
+- `area_model` — 面积模型（行×列网格部分着色）。例：`{"type": "area_model", "rows": 2, "cols": 5, "shaded": 7}` 表示 2×5 网格涂前 7 格
+- `fraction_bar` — 分数条。例：`{"type": "fraction_bar", "parts": 5, "shaded": 2}` 表示 5 等分涂 2 份
+- `place_value_chart` — 数位表。例：`{"type": "place_value_chart", "value": "23.45"}`
+
+不要在每页都加 diagram；只在能显著帮助理解时加。文字够清楚时不加。
+
 ## 重要约束
 
 - 严格使用提供的"课时正文"和"课程标准"作为内容依据，不要编造教材里没有的知识点

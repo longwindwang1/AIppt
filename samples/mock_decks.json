@@ -23,6 +23,7 @@
       {"type": "title", "title": "小数的意义", "subtitle": "知识点专项 · 北师大版四下", "notes": "用于单元复习课。"},
       {"type": "section", "title": "一、知识溯源"},
       {"type": "content", "title": "从整数到小数", "bullets": ["1 元 = 10 角", "1 角 = 0.1 元", "1 分 = 0.01 元"], "animation": "reveal_on_click"},
+      {"type": "content", "title": "小数 2.45 的数位", "bullets": ["看下面这张数位表："], "diagram": {"type": "place_value_chart", "value": "2.45"}},
       {"type": "content", "title": "小数的核心要素", "bullets": ["整数部分", "小数点", "小数部分（十分位/百分位/千分位）"]},
       {"type": "example", "title": "例 · 读写", "question": "2.45 由几个 1，几个 0.1，几个 0.01 组成？", "solution_steps": ["整数部分 2 = 2 个 1", "十分位 4 = 4 个 0.1", "百分位 5 = 5 个 0.01"], "answer": "2 个 1 + 4 个 0.1 + 5 个 0.01", "animation": "step_by_step"},
       {"type": "content", "title": "易错点", "bullets": ["把 0.05 读成零点五", "小数末尾 0 影响大小（不影响）", "整数部分 0 不能漏"]},

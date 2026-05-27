@@ -15,6 +15,17 @@
 5. **互动练习**（2~3 页 type=practice + type=interactive 交替）
 6. **回顾与拓展**（type=summary）：用 `animation: "reveal_on_click"` 逐条总结
 
+## 数学示意图
+
+互动课特别适合用图引发猜想：
+
+- `number_line` `{"type": "number_line", "start": 0, "end": 5, "marks": [2.5]}` — 配"你觉得标记的点在哪个范围？"
+- `area_model` `{"type": "area_model", "rows": 3, "cols": 4, "shaded": 7}` — 配"这是几分之几？为什么？"
+- `fraction_bar` — 配"我把它再均分一次会变成几等分？"
+- `place_value_chart` — 配"如果把这个数扩大 10 倍，每位上的数字怎么动？"
+
+不一定每页都加，但有图的互动页学生反应更强烈。
+
 ## 互动设计要点
 
 - **每个 interactive 页面必须有清晰的问题**（question 字段）和教师追问思路（hint + notes）

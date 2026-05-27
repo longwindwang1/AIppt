@@ -17,6 +17,17 @@
 6. **巩固练习**（2~3 题 type=practice）
 7. **课堂小结**（type=summary）：用思维导图式 bullets 串联
 
+## 数学示意图
+
+复习课很适合用图。涉及位值 / 数轴 / 分数 / 面积等概念时，在 slide 加 `diagram` 字段。支持 4 种：
+
+- `number_line` `{"type": "number_line", "start": 0, "end": 10, "marks": [3.5], "labels": ["A"]}`
+- `area_model` `{"type": "area_model", "rows": 4, "cols": 5, "shaded": 12}`
+- `fraction_bar` `{"type": "fraction_bar", "parts": 8, "shaded": 3}`
+- `place_value_chart` `{"type": "place_value_chart", "value": "23.45"}`
+
+加图的页 bullets 数量自动会被压缩（系统排版自动处理）。
+
 ## 质量要求
 
 - 例题难度梯度明显：从基础应用 → 综合应用 → 拓展

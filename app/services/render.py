@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import io
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from pptx.util import Inches, Pt
 
 from app.config import settings
 from app.models.slide import AnimationHint, Deck, Slide, SlideType
+from app.services import diagrams
 
 
 # --- 主题系统 ---------------------------------------------------------------
@@ -195,18 +197,24 @@ def _add_slide(prs: Presentation, slide: Slide, theme: Theme) -> None:
         spTree.remove(bg._element)
         spTree.insert(2, bg._element)
 
+    # diagram 存在时，主内容区压缩到上半部分；底部留给示意图
+    has_diagram = bool(slide.diagram)
+
     if slide.type == SlideType.title:
         _draw_title_slide(s, slide, theme)
     elif slide.type == SlideType.section:
         _draw_section_slide(s, slide, theme)
     elif slide.type == SlideType.example:
-        _draw_example_slide(s, slide, theme)
+        _draw_example_slide(s, slide, theme, compact=has_diagram)
     elif slide.type == SlideType.practice:
-        _draw_practice_slide(s, slide, theme)
+        _draw_practice_slide(s, slide, theme, compact=has_diagram)
     elif slide.type == SlideType.interactive:
-        _draw_interactive_slide(s, slide, theme)
+        _draw_interactive_slide(s, slide, theme, compact=has_diagram)
     else:
-        _draw_content_slide(s, slide, theme)
+        _draw_content_slide(s, slide, theme, compact=has_diagram)
+
+    if has_diagram:
+        _add_diagram(s, slide.diagram)
 
     if slide.notes:
         s.notes_slide.notes_text_frame.text = slide.notes
@@ -230,48 +238,74 @@ def _draw_section_slide(s, slide: Slide, theme: Theme) -> None:
         _add_bullets(s, slide.bullets, theme, top=Inches(4.8), size=20, color=theme.muted_color)
 
 
-def _draw_content_slide(s, slide: Slide, theme: Theme) -> None:
+def _draw_content_slide(s, slide: Slide, theme: Theme, compact: bool = False) -> None:
     _add_title_bar(s, slide.title, theme)
     if slide.bullets:
+        # compact 时 bullets 区缩到 1.6~4.0；否则 1.6~6.5
         _add_bullets(s, slide.bullets, theme, top=Inches(1.6))
 
 
-def _draw_example_slide(s, slide: Slide, theme: Theme) -> None:
+def _draw_example_slide(s, slide: Slide, theme: Theme, compact: bool = False) -> None:
     _add_title_bar(s, slide.title or "例题", theme)
     y = Inches(1.6)
     if slide.question:
         _add_text_box(s, "【题目】" + slide.question, Inches(0.6), y,
                       Inches(12), Inches(1.4), theme, size=22, color=theme.text_color)
         y = Inches(3.0)
-    if slide.solution_steps:
+    if slide.solution_steps and not compact:
         _add_text_box(s, "【解答】", Inches(0.6), y, Inches(2), Inches(0.5),
                       theme, size=22, bold=True, color=theme.accent_color)
         _add_bullets(s, slide.solution_steps, theme, top=Inches(y.inches + 0.6), size=20)
-    if slide.answer:
+    if slide.answer and not compact:
         _add_text_box(s, "答：" + slide.answer, Inches(0.6), Inches(6.4),
                       Inches(12), Inches(0.7), theme, size=22, bold=True, color=theme.accent_color)
 
 
-def _draw_practice_slide(s, slide: Slide, theme: Theme) -> None:
+def _draw_practice_slide(s, slide: Slide, theme: Theme, compact: bool = False) -> None:
     _add_title_bar(s, slide.title or "课堂练习", theme)
     if slide.question:
         _add_text_box(s, slide.question, Inches(0.6), Inches(1.8),
                       Inches(12), Inches(2), theme, size=24, color=theme.text_color)
-    if slide.hint:
+    if slide.hint and not compact:
         _add_text_box(s, "提示 · " + slide.hint, Inches(0.6), Inches(6.2),
                       Inches(12), Inches(0.7), theme, size=18, color=theme.muted_color)
 
 
-def _draw_interactive_slide(s, slide: Slide, theme: Theme) -> None:
+def _draw_interactive_slide(s, slide: Slide, theme: Theme, compact: bool = False) -> None:
     _add_title_bar(s, slide.title or "想一想", theme)
     if slide.question:
         _add_text_box(s, slide.question, Inches(0.6), Inches(2.0),
                       Inches(12), Inches(2), theme, size=28, bold=True, color=theme.title_color)
-    if slide.bullets:
+    if slide.bullets and not compact:
         _add_bullets(s, slide.bullets, theme, top=Inches(4.5), size=20)
-    if slide.hint:
+    if slide.hint and not compact:
         _add_text_box(s, "提示：" + slide.hint, Inches(0.6), Inches(6.4),
                       Inches(12), Inches(0.7), theme, size=16, color=theme.muted_color)
+
+
+def _add_diagram(s, diagram: dict) -> None:
+    """在 slide 底部 1/3 区域居中嵌入数学示意图 PNG。"""
+    try:
+        png = diagrams.render_diagram_png_bytes(diagram)
+    except Exception as e:
+        # 不让单张图挂掉整 deck；把错误写进 notes 末尾
+        if s.has_notes_slide:
+            s.notes_slide.notes_text_frame.text += f"\n[diagram error] {e}"
+        return
+
+    # 写到临时文件再 add_picture（python-pptx 接受 path 或 file-like）
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+        tmp.write(png)
+        tmp_path = tmp.name
+    try:
+        # 居中放在 y=4.3，宽 9 inches × 高 2.8 inches
+        width = Inches(9)
+        height = Inches(2.8)
+        left = Inches((13.333 - 9) / 2)
+        top = Inches(4.4)
+        s.shapes.add_picture(tmp_path, left, top, width=width, height=height)
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 def _add_title_bar(s, title: str, theme: Theme) -> None:

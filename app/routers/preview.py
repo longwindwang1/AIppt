@@ -1,6 +1,8 @@
 """Speaker view 预览：HTML 渲染 deck.json，让老师下载前逐页过一遍。
 
-也承载单页重生成 API（POST /runs/{id}/slides/{idx}/regenerate）。
+也承载：
+- POST /runs/{id}/slides/{idx}/regenerate — 单页重生成
+- GET  /api/runs/{id}/slides/{idx}/diagram.png — 数学示意图 PNG
 """
 from __future__ import annotations
 
@@ -9,14 +11,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.requests import Request
 
 from app.config import PROJECT_ROOT, settings
 from app.models.slide import Deck, Slide
-from app.services import runs as runs_service
+from app.services import diagrams, runs as runs_service
 from app.services.generate import (
     GenerationError,
     GenerationRequest,
@@ -111,3 +113,20 @@ def regenerate_slide(run_id: str, slide_idx: int, body: SlideRegenBody) -> dict:
         "new_slide": new_slide.model_dump(),
         "pptx_filename": pptx_path.name,
     }
+
+
+@router.get("/api/runs/{run_id}/slides/{slide_idx}/diagram.png")
+def diagram_png(run_id: str, slide_idx: int) -> Response:
+    """渲染该页的 diagram 为 PNG。404 if 该页没 diagram。"""
+    deck = _load_deck(run_id)
+    if slide_idx < 0 or slide_idx >= len(deck.slides):
+        raise HTTPException(status_code=400, detail="slide_idx 越界")
+    diagram = deck.slides[slide_idx].diagram
+    if not diagram:
+        raise HTTPException(status_code=404, detail="该页无 diagram")
+    try:
+        png = diagrams.render_diagram_png_bytes(diagram)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"diagram 渲染失败：{e}")
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": "max-age=300"})
