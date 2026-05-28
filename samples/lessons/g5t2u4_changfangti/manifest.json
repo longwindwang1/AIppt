@@ -1,0 +1,15 @@
+{
+  "unit": {
+    "grade": 5,
+    "term": 2,
+    "unit_index": 4,
+    "unit_name": "长方体（二）"
+  },
+  "lessons": [
+    {
+      "file": "01_长方体的体积.md",
+      "name": "长方体的体积",
+      "knowledge_points": ["体积单位 cm³", "长方体体积公式 V=abh", "正方体体积公式 V=a³"]
+    }
+  ]
+}

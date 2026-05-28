@@ -55,7 +55,7 @@ class Slide(BaseModel):
 
 class Deck(BaseModel):
     title: str
-    grade: int = Field(ge=1, le=6)
+    grade: int = Field(ge=1, le=12)   # 1-6 小学，7-9 初中，10-12 高中
     term: int = Field(ge=1, le=2)
     unit_name: str
     lesson_name: str
@@ -143,7 +143,7 @@ DECK_TOOL_SCHEMA = {
         "type": "object",
         "properties": {
             "title": {"type": "string", "description": "PPT 标题（如：北师大版四年级下册 第三单元 买菜）"},
-            "grade": {"type": "integer", "minimum": 1, "maximum": 6},
+            "grade": {"type": "integer", "minimum": 1, "maximum": 12},
             "term": {"type": "integer", "minimum": 1, "maximum": 2, "description": "学期：1=上册, 2=下册"},
             "unit_name": {"type": "string"},
             "lesson_name": {"type": "string"},

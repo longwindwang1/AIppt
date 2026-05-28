@@ -296,9 +296,9 @@ def _draw_title_slide(s, slide: Slide, theme: Theme) -> None:
     deco2.fill.fore_color.rgb = _lighten(theme.title_color, 0.3)
     deco2.line.fill.background()
 
-    # 左下角"数学"标签（白色，叠在色块上）
-    tag = _add_textbox(s, "数学", Inches(0.5), Inches(6.5), Inches(2), Inches(0.6),
-                       size=20, color=RGBColor(0xFF, 0xFF, 0xFF), bold=True, font=theme.cn_font)
+    # 左下角学科 chip（从 unit_name 推断；无法推断时省略）
+    # 历史: 含"史"/"朝代"; 数学: 含"数"/"加减"/"分数"; 其余留空
+    # 这里简化：不显示具体学科，让封面保持通用
 
     # 右侧标题（大字）
     title_text = slide.title or "（未命名）"
@@ -372,43 +372,49 @@ def _draw_content_slide(s, slide: Slide, theme: Theme, compact: bool = False) ->
 
 
 def _draw_example_slide(s, slide: Slide, theme: Theme, compact: bool = False) -> None:
-    """例题：三个分明的色块区。
-
-    精确布局（compact 即 has_diagram，y 单位 inch）：
-      0.0~1.0     标题栏
-      1.15~2.35   题目卡 (h=1.2)
-      2.5~4.0     解答卡 (h=1.5, compact 字号 14)
-      4.15~5.85   diagram (h=1.7, w=9, 居中)
-      6.05~6.6    答案条 (h=0.55, 在 footer 7.05 上方)
-
-    非 compact:
-      1.15~2.35   题目
-      2.5~6.0     解答（大）
-      6.15~6.7    答案
-    """
+    """例题：题目 / 解答 / 答案三色块分区。题目高度自适应（兼容历史长题干 / 数学短题）。"""
     _add_title_bar(s, slide.title or "例题", theme)
 
-    # 题目卡片
+    # 估算题目高度：基于换行 + 字数（兼容数学 1~2 行短题和历史 5+ 行长史料）
+    q_h = 0.0
+    q_y_end = 1.15
     if slide.question:
         y = 1.15
-        q_h = 1.2
+        q = slide.question
+        line_breaks = q.count("\n") + 1
+        wrap_lines = max(0, len(q) // 32)         # 11.9" 宽 22pt 中文每行约 32 字
+        est_lines = max(line_breaks, wrap_lines + 1)
+        # 紧凑模式给题目少一点，非紧凑给得多
+        max_qh = 2.6 if compact else 3.6
+        q_h = max(1.0, min(0.32 * est_lines + 0.5, max_qh))
+
         _add_card(s, theme,
                   left=Inches(0.5), top=Inches(y),
                   width=Inches(12.3), height=Inches(q_h),
                   bg=theme.soft_title)
         _add_textbox(s, "题目", Inches(0.7), Inches(y + 0.06), Inches(1.5), Inches(0.4),
                      size=16, color=theme.title_color, bold=True, font=theme.cn_font)
-        _add_textbox(s, slide.question, Inches(0.7), Inches(y + 0.4),
+        q_font_size = 18 if est_lines >= 4 else 22
+        _add_textbox(s, q, Inches(0.7), Inches(y + 0.4),
                      Inches(11.9), Inches(q_h - 0.45),
-                     size=22, color=theme.text_color, font=theme.cn_font)
+                     size=q_font_size, color=theme.text_color, font=theme.cn_font)
+        q_y_end = y + q_h + 0.15
 
-    # 解答区（自适应高度 + 字号）
+    # 先估算答案条占位（自下而上），剩余空间给 sol
+    ans_h = 0.0
+    ans_top = 7.0   # 默认 footer 顶位置
+    if slide.answer:
+        ans = "✓  答：" + slide.answer
+        ans_lines = max(1, len(ans) // 30 + ans.count("\n"))
+        ans_h = max(0.5, min(0.42 * ans_lines + 0.25, 1.7))
+        ans_top = 7.0 - ans_h - 0.05
+
+    # 解答区（自适应高度 + 字号），紧跟在题目下方
     sol_h = 0.0
     if slide.solution_steps:
         n = len(slide.solution_steps)
         total = sum(len(t) for t in slide.solution_steps)
         if compact:
-            # 紧凑：步数多/字多时缩字号、增高度
             if n <= 3 and total <= 120:
                 sol_h, step_size = 1.5, 14
             elif n <= 4 and total <= 200:
@@ -416,10 +422,12 @@ def _draw_example_slide(s, slide: Slide, theme: Theme, compact: bool = False) ->
             else:
                 sol_h, step_size = 2.2, 12
         else:
-            sol_h = 3.5
+            # 非紧凑：解答可用空间 = 题目结束 → 答案条顶
+            avail = ans_top - q_y_end - 0.1
+            sol_h = max(1.2, min(avail, 3.8))
             step_size = 18 if total > 200 else 20
 
-        sol_y = 2.5
+        sol_y = q_y_end
         _add_card(s, theme,
                   left=Inches(0.5), top=Inches(sol_y),
                   width=Inches(12.3), height=Inches(sol_h),
@@ -432,19 +440,19 @@ def _draw_example_slide(s, slide: Slide, theme: Theme, compact: bool = False) ->
                              w=Inches(11.6), h=Inches(sol_h - 0.5),
                              size=step_size)
 
-    # 答案条
+    # 答案条（位置和高度上面已经估算过）
     if slide.answer:
-        ans_y = 6.05 if compact else 6.15
+        ans = "✓  答：" + slide.answer
+        ans_lines = max(1, len(ans) // 30 + ans.count("\n"))
+        ans_size = 22 if ans_lines <= 1 else (18 if ans_lines == 2 else 15)
         _add_card(s, theme,
-                  left=Inches(0.5), top=Inches(ans_y),
-                  width=Inches(12.3), height=Inches(0.55),
+                  left=Inches(0.5), top=Inches(ans_top),
+                  width=Inches(12.3), height=Inches(ans_h),
                   bg=theme.accent_color)
-        _add_textbox(s, "✓  答：" + slide.answer,
-                     Inches(0.8), Inches(ans_y + 0.05),
-                     Inches(11.7), Inches(0.45),
-                     size=20 if compact else 22,
-                     color=RGBColor(0xFF, 0xFF, 0xFF), bold=True,
-                     font=theme.cn_font)
+        _add_textbox(s, ans, Inches(0.8), Inches(ans_top + 0.08),
+                     Inches(11.7), Inches(ans_h - 0.1),
+                     size=ans_size, color=RGBColor(0xFF, 0xFF, 0xFF),
+                     bold=True, font=theme.cn_font)
 
     # 返回 sol_h 给 _add_slide 用以定位 diagram
     return sol_h

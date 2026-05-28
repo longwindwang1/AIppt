@@ -15,7 +15,7 @@ router = APIRouter(tags=["upload"])
 @router.post("/upload")
 async def upload(
     file: UploadFile = File(...),
-    grade: int = Form(..., ge=1, le=6),
+    grade: int = Form(..., ge=1, le=12),
     term: int = Form(..., ge=1, le=2),
     unit_index: int = Form(..., ge=1, le=20),
     unit_name: str = Form(...),

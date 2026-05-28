@@ -27,7 +27,7 @@ router = APIRouter(tags=["generate"])
 
 class GenerateBody(BaseModel):
     deck_type: str = Field(pattern="^(lesson_plan|knowledge_point|practice|interactive)$")
-    grade: int = Field(ge=1, le=6)
+    grade: int = Field(ge=1, le=12)
     term: int = Field(ge=1, le=2)
     unit_name: str
     lesson_name: str
@@ -152,7 +152,7 @@ def delete_run(run_id: str) -> dict:
 
 class BatchBody(BaseModel):
     deck_type: str = Field(pattern="^(lesson_plan|knowledge_point|practice|interactive)$")
-    grade: int = Field(ge=1, le=6)
+    grade: int = Field(ge=1, le=12)
     term: int = Field(ge=1, le=2)
     unit_name: str
     theme: str = "formal_blue"
