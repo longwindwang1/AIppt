@@ -17,6 +17,10 @@
 6. **巩固练习**（2~3 题 type=practice）
 7. **课堂小结**（type=summary）：用思维导图式 bullets 串联
 
+## solution_steps 精简
+
+每个 example 的 solution_steps **最多 4 步**，每步 ≤ 30 字。笔算细节合并，不要逐位拆。
+
 ## 数学示意图
 
 复习课很适合用图。涉及位值 / 数轴 / 分数 / 面积等概念时，在 slide 加 `diagram` 字段。支持 4 种：

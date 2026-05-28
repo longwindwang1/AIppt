@@ -21,6 +21,10 @@
 - **example 类型**：必须配 solution_steps（分步推导）和 answer
 - 数字算出来要对，不要凑数
 
+## example 的 solution_steps
+
+最多 4 步，每步 ≤ 30 字。
+
 ## 数学示意图
 
 练习题涉及几何 / 分数 / 数轴 / 面积时，可以在题目页加 `diagram` 字段帮助学生理解题意。4 种类型：

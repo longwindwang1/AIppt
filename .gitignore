@@ -41,6 +41,7 @@ fonts/*
 .vscode/
 *.swp
 .DS_Store
+.claude/
 
 # uv
 .uv/
